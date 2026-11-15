@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 
 from backend.db.database import init_db
 from backend.api.routes import router as api_router
+from backend.api.ml_routes import router as ml_router
 
 app = FastAPI(
     title="VidyutSetu — AMI Data Exchange Interoperability Testing Workbench",
@@ -29,6 +30,7 @@ init_db()
 
 # Mount API routes
 app.include_router(api_router)
+app.include_router(ml_router)
 
 # Mount Static UI
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")

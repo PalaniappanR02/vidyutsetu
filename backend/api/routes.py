@@ -21,6 +21,11 @@ from backend.models.canonical import (
     CompatibilityScoreBreakdown
 )
 from backend.models.vendor import VendorProfile
+from app.ml.inference import (
+    MLArtifactsError,
+    make_ml_findings,
+    predict_canonical_readings,
+)
 
 router = APIRouter(prefix="/api", tags=["Workbench API"])
 
@@ -169,6 +174,19 @@ async def execute_interoperability_test(
         format_parsed_successfully=parsing_succeeded
     )
 
+    # Run ML after rules; ML findings are reported separately and do not affect the score.
+    ml_error = None
+    try:
+        ml_results = predict_canonical_readings(canonical_payload.readings)
+    except MLArtifactsError as error:
+        ml_results = []
+        ml_error = str(error)
+    ml_findings = make_ml_findings(ml_results)
+    findings = [
+        {**issue.model_dump(), "source": "rule"}
+        for issue in all_issues
+    ] + ml_findings
+
     # If target vendor requested, serialize to target format
     target_output = None
     if target_vendor and target_vendor != "none":
@@ -194,7 +212,7 @@ async def execute_interoperability_test(
         total_score=score_breakdown.total_score,
         grade=score_breakdown.grade,
         summary=score_breakdown.summary,
-        issues_json=json.dumps([iss.dict() for iss in all_issues]),
+        issues_json=json.dumps([issue.dict() for issue in all_issues]),
         raw_preview=content_str[:5000],
         canonical_preview=json.dumps(canonical_payload.dict(), default=str)[:10000],
         target_preview=json.dumps(target_output, default=str)[:10000] if isinstance(target_output, (dict, list)) else (str(target_output)[:10000] if target_output else ""),
@@ -212,7 +230,11 @@ async def execute_interoperability_test(
         "valid_records": valid_count,
         "invalid_records": invalid_count,
         "score": score_breakdown.dict(),
-        "issues": [iss.dict() for iss in all_issues],
+        "issues": [issue.dict() for issue in all_issues],
+        "findings": findings,
+        "ml_results": ml_results,
+        "ml_findings": ml_findings,
+        "ml_error": ml_error,
         "canonical_payload": canonical_payload.dict(),
         "target_output": target_output,
         "duration_ms": elapsed_ms
