@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -42,11 +41,7 @@ def canonical_reading_to_features(reading: Any) -> dict[str, Any]:
         "frequency_hz": "frequency",
         "interval_minutes": "interval_minutes",
     }
-    features = {
-        target: canonical[source]
-        for source, target in field_mapping.items()
-        if source in canonical
-    }
+    features = {target: canonical.get(source) for source, target in field_mapping.items()}
     if "payload_size_bytes" in canonical:
         features["payload_size_bytes"] = canonical["payload_size_bytes"]
     else:
@@ -122,18 +117,9 @@ def predict_canonical_readings(readings: Sequence[Any]) -> list[dict[str, Any]]:
         str(ARTIFACTS_DIR.resolve())
     )
     records = [canonical_reading_to_features(reading) for reading in readings]
-    ordered_indices = sorted(
-        range(len(records)),
-        key=lambda index: (
-            str(records[index].get("meter_id") or ""),
-            _timestamp_sort_key(records[index].get("timestamp")),
-            index,
-        ),
-    )
-    ordered_records = [records[index] for index in ordered_indices]
 
-    encoded_predictions = classifier.predict(ordered_records)
-    probabilities = classifier.predict_proba(ordered_records)
+    encoded_predictions = classifier.predict(records)
+    probabilities = classifier.predict_proba(records)
     classifier_classes = classifier.named_steps["classifier"].classes_
     decoded_classes = label_encoder.inverse_transform(
         [int(class_index) for class_index in classifier_classes]
@@ -142,11 +128,11 @@ def predict_canonical_readings(readings: Sequence[Any]) -> list[dict[str, Any]]:
         [int(class_index) for class_index in encoded_predictions]
     )
 
-    anomaly_scores = -detector.decision_function(ordered_records)
+    anomaly_scores = -detector.decision_function(records)
     anomaly_threshold = metrics["anomaly_detection"]["test"]["threshold"]
     results_by_index = {}
     for original_index, label, probability_row, anomaly_score in zip(
-        ordered_indices, predicted_labels, probabilities, anomaly_scores, strict=True
+        range(len(readings)), predicted_labels, probabilities, anomaly_scores, strict=True
     ):
         predicted_class_index = list(decoded_classes).index(label)
         reading = readings[original_index]
@@ -164,23 +150,6 @@ def predict_canonical_readings(readings: Sequence[Any]) -> list[dict[str, Any]]:
             "anomaly_score": float(anomaly_score),
         }
     return [results_by_index[index] for index in range(len(readings))]
-
-
-def _timestamp_sort_key(value: Any) -> tuple[int, float]:
-    if value is None:
-        return (1, 0.0)
-    try:
-        timestamp = (
-            value
-            if isinstance(value, datetime)
-            else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        )
-        if timestamp.tzinfo is None:
-            timestamp = timestamp.replace(tzinfo=timezone.utc)
-        return (0, timestamp.astimezone(timezone.utc).timestamp())
-    except (TypeError, ValueError, OverflowError):
-        return (1, 0.0)
-
 
 def make_ml_findings(predictions: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
