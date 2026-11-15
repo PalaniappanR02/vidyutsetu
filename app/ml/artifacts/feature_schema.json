@@ -1,0 +1,95 @@
+{
+  "training_data": "SYNTHETIC",
+  "features": [
+    {
+      "name": "missing_key_count",
+      "type": "numeric"
+    },
+    {
+      "name": "null_count",
+      "type": "numeric"
+    },
+    {
+      "name": "voltage_clean",
+      "type": "numeric"
+    },
+    {
+      "name": "kwh_clean",
+      "type": "numeric"
+    },
+    {
+      "name": "frequency_clean",
+      "type": "numeric"
+    },
+    {
+      "name": "current_clean",
+      "type": "numeric"
+    },
+    {
+      "name": "pf_clean",
+      "type": "numeric"
+    },
+    {
+      "name": "payload_size_bytes",
+      "type": "numeric"
+    },
+    {
+      "name": "is_voltage_malformed",
+      "type": "numeric"
+    },
+    {
+      "name": "is_frequency_malformed",
+      "type": "numeric"
+    },
+    {
+      "name": "is_kwh_malformed",
+      "type": "numeric"
+    },
+    {
+      "name": "is_current_malformed",
+      "type": "numeric"
+    },
+    {
+      "name": "is_pf_malformed",
+      "type": "numeric"
+    },
+    {
+      "name": "is_payload_size_malformed",
+      "type": "numeric"
+    },
+    {
+      "name": "is_freq_out_of_range",
+      "type": "numeric"
+    },
+    {
+      "name": "is_kwh_negative",
+      "type": "numeric"
+    },
+    {
+      "name": "kwh_delta",
+      "type": "numeric"
+    },
+    {
+      "name": "interval_ratio",
+      "type": "numeric"
+    },
+    {
+      "name": "duplicate_key",
+      "type": "numeric"
+    },
+    {
+      "name": "kwh_rolling_zscore",
+      "type": "numeric"
+    }
+  ],
+  "fault_classes": [
+    "DUPLICATE_READING",
+    "MISSING_FIELD",
+    "NEGATIVE_OR_ROLLBACK_KWH",
+    "OUT_OF_RANGE_VALUE",
+    "TIMESTAMP_DRIFT_OR_GAP",
+    "UNIT_MISMATCH",
+    "VALID",
+    "WRONG_DATATYPE"
+  ]
+}
