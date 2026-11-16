@@ -1,4 +1,6 @@
 import json
+from datetime import datetime, timedelta, timezone
+from itertools import count
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -12,12 +14,15 @@ from ml_training.train import FAULT_LABEL, _grouped_holdout, load_training_data
 
 
 client = TestClient(app)
+_reading_sequence = count()
 
 
 def _reading(meter_id: str) -> dict:
     return {
         "meter_serial_number": meter_id,
-        "timestamp": "2026-01-01T00:00:00Z",
+        "timestamp": (
+            datetime.now(timezone.utc) + timedelta(seconds=next(_reading_sequence))
+        ).isoformat(),
         "interval_minutes": 15,
         "active_energy_import_kwh": 12.5,
         "apparent_energy_kvah": 13.0,

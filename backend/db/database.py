@@ -2,7 +2,7 @@
 
 import json
 from datetime import datetime, timezone
-from sqlalchemy import create_engine, Column, String, Integer, Float, DateTime, Text, Boolean
+from sqlalchemy import create_engine, Column, String, Integer, Float, DateTime, Text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 DATABASE_URL = "sqlite:///./vidyutsetu.db"
@@ -48,6 +48,35 @@ class DBCustomVendorConfig(Base):
     protocol = Column(String(64), default="CUSTOM")
     config_json = Column(Text, default="{}")
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class DBMeterHistory(Base):
+    __tablename__ = "meter_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    meter_id = Column(String(128), nullable=False, index=True)
+    ts = Column(String(64), nullable=False)
+    payload_json = Column(Text, nullable=False)
+
+
+class DBTestSuite(Base):
+    __tablename__ = "test_suites"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    scenarios_json = Column(Text, nullable=False, default="[]")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class DBSuiteRun(Base):
+    __tablename__ = "suite_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    suite_id = Column(Integer, nullable=False, index=True)
+    run_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    results_json = Column(Text, nullable=False, default="[]")
+    passed_count = Column(Integer, nullable=False, default=0)
+    failed_count = Column(Integer, nullable=False, default=0)
 
 
 def init_db():
