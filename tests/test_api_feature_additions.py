@@ -4,7 +4,8 @@ import uuid
 from fastapi.testclient import TestClient
 
 from backend.api import ml_routes
-from backend.db.database import DBMeterHistory, SessionLocal
+from backend.db import database
+from backend.db.database import DBMeterHistory
 from backend.main import app
 
 
@@ -226,7 +227,7 @@ def test_ml_validation_uses_history_but_returns_only_submitted_predictions(monke
     assert len(observed_sequences[1]) == 2
     assert second.json()["predictions"][0]["reading_index"] == 0
 
-    with SessionLocal() as db:
+    with database.SessionLocal() as db:
         rows = db.query(DBMeterHistory).filter(DBMeterHistory.meter_id == meter_id).all()
         assert len(rows) == 2
 
@@ -262,7 +263,7 @@ def test_ml_meter_history_retains_only_the_latest_fifty(monkeypatch):
     response = client.post("/ml/validate-batch", json={"readings": readings})
     assert response.status_code == 200
 
-    with SessionLocal() as db:
+    with database.SessionLocal() as db:
         rows = db.query(DBMeterHistory).filter(DBMeterHistory.meter_id == meter_id).all()
         assert len(rows) == 50
 

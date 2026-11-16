@@ -9,6 +9,8 @@ from sklearn.preprocessing import LabelEncoder
 
 import app.ml.inference as inference
 from app.ml.inference import canonical_reading_to_features
+from backend.db import database
+from backend.db.database import DBMeterHistory
 from backend.main import app
 from ml_training.train import FAULT_LABEL, _grouped_holdout, load_training_data
 
@@ -198,12 +200,25 @@ def test_ml_validate_batch_classifies_unit_mismatch_in_meter_sequence():
 
 
 def test_inference_recall_matches_metrics_for_seed_42_held_out_meters():
+    """Held-out meters in CSV order, each class recall within 3 points of metrics.json.
+
+    Runs on a fresh per-test database, so no stored meter history can influence the
+    sequence features; the assertion below makes that precondition explicit.
+    """
     data_path = Path(__file__).parents[1] / "data" / "ami_payload_dataset_synthetic.csv"
     records = load_training_data(data_path)
     encoder = LabelEncoder()
     encoded_labels = encoder.fit_transform(records[FAULT_LABEL].astype(str))
     _train_indices, test_indices = _grouped_holdout(records, encoded_labels, 0.2, seed=42)
     held_out = records.iloc[test_indices]
+    held_out_meters = set(held_out["meter_id"])
+    with database.SessionLocal() as db:
+        stored = (
+            db.query(DBMeterHistory)
+            .filter(DBMeterHistory.meter_id.in_(held_out_meters))
+            .count()
+        )
+    assert stored == 0, "stored history must not change the held-out regression result"
     readings = _canonical_readings_from_training_rows(held_out.to_dict(orient="records"))
 
     predictions = inference.predict_canonical_readings(readings)

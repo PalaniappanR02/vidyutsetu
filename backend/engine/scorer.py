@@ -90,6 +90,38 @@ class ScoringEngine:
             summary=summary
         )
 
+    @classmethod
+    def calculate_data_quality(
+        cls,
+        total_records: int,
+        valid_records: int,
+        issues: List[DiagnosticIssue],
+    ) -> Dict[str, Any]:
+        """Record-level data quality for one run (rule-derived, transparent).
+
+        Unlike the interoperability score, this measures how much of the submitted
+        data survived canonicalization and how densely issues are attached to the
+        records that were processed. Nothing here is learned or hardcoded per run.
+        """
+        records = max(total_records, 1)
+        error_count = sum(1 for issue in issues if issue.severity == IssueSeverity.ERROR)
+        warning_count = sum(
+            1 for issue in issues if issue.severity == IssueSeverity.WARNING
+        )
+        record_validity_pct = round(min(100.0, (valid_records / records) * 100.0), 1)
+        issue_density_pct = round(
+            min(100.0, ((error_count + (0.5 * warning_count)) / records) * 100.0), 1
+        )
+        score = round(max(0.0, min(100.0, record_validity_pct - (issue_density_pct * 0.25))), 1)
+        return {
+            "score": score,
+            "record_validity_pct": record_validity_pct,
+            "issue_density_pct": issue_density_pct,
+            "error_count": error_count,
+            "warning_count": warning_count,
+            "source": "rule",
+        }
+
 
 class DiagnosticSuggester:
     """Provides actionable remediation rules and configurations based on detected issues."""

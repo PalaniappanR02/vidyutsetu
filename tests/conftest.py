@@ -1,30 +1,46 @@
-import os
+"""Shared pytest fixtures.
+
+Every test gets its own in-memory SQLite database so stored meter history and
+persisted runs can never leak between tests (or into the repository database).
+"""
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-
 from backend.db import database
 
-database.DATABASE_URL = os.environ["DATABASE_URL"]
-database.engine = create_engine(
-    database.DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
+
+def _memory_engine():
+    return create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+
+
+# Bind the module-level engine to a scratch in-memory database before any test
+# module imports backend.main, so importing the app never touches vidyutsetu.db.
+database.engine = _memory_engine()
 database.SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=database.engine,
 )
+database.Base.metadata.create_all(bind=database.engine)
 
 
-@pytest.fixture(scope="session", autouse=True)
-def fresh_database():
-    database.Base.metadata.drop_all(bind=database.engine)
-    database.Base.metadata.create_all(bind=database.engine)
+@pytest.fixture(autouse=True)
+def isolated_database(monkeypatch):
+    """Fresh schema per test, with no rows carried over."""
+    engine = _memory_engine()
+    database.Base.metadata.create_all(bind=engine)
+    monkeypatch.setattr(database, "engine", engine)
+    monkeypatch.setattr(
+        database,
+        "SessionLocal",
+        sessionmaker(autocommit=False, autoflush=False, bind=engine),
+    )
     yield
-    database.engine.dispose()
+    engine.dispose()

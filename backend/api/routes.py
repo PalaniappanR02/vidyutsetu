@@ -31,6 +31,7 @@ from backend.models.canonical import (
 from backend.models.vendor import VendorProfile
 from app.ml.inference import (
     MLArtifactsError,
+    get_ml_health,
     make_ml_findings,
     predict_canonical_readings,
 )
@@ -114,6 +115,18 @@ def _stage(
         "root_cause": first.get("message"),
         "suggested_action": first.get("suggested_fix"),
     }
+
+
+def _ml_model_version() -> Optional[str]:
+    """Version tag read from the existing artifacts (no retraining, no new files)."""
+    try:
+        health = get_ml_health()
+    except MLArtifactsError:
+        return None
+    classifier = health["model_versions"]["fault_classifier"][:12]
+    detector = health["model_versions"]["anomaly_detector"][:8]
+    algorithm = health["metrics"].get("selected_classifier", "classifier")
+    return f"{algorithm}-{classifier}+iforest-{detector}"
 
 
 def _execute_workbench_payload(
@@ -207,6 +220,7 @@ def _execute_workbench_payload(
                 "message": "Input could not be parsed as JSON.",
             }
         )
+    semantic_started = time.perf_counter()
     semantic_diagnostics = [
         issue.model_dump() for issue in semantic_adapter_issues
     ] + [
@@ -214,6 +228,7 @@ def _execute_workbench_payload(
         for issue in validation_issues
         if issue.code not in PHYSICAL_DIAGNOSTIC_CODES
     ]
+    semantic_duration_ms = (time.perf_counter() - semantic_started) * 1000.0
     physical_diagnostics = [
         issue.model_dump()
         for issue in validation_issues
@@ -222,10 +237,17 @@ def _execute_workbench_payload(
     stages = [
         _stage("parse", parse_diagnostics, parse_duration_ms),
         _stage("syntactic", syntactic_diagnostics, syntactic_duration_ms),
-        _stage("semantic mapping", semantic_diagnostics, 0.0),
+        _stage("semantic mapping", semantic_diagnostics, semantic_duration_ms),
         _stage("physical sanity", physical_diagnostics, validation_duration_ms),
         _stage("ML screening", ml_diagnostics, ml_duration_ms, skipped=bool(ml_error)),
     ]
+
+    data_quality = ScoringEngine.calculate_data_quality(
+        total_records=total_records,
+        valid_records=valid_count,
+        issues=all_issues,
+    )
+    model_version = _ml_model_version()
 
     findings = [
         {**issue.model_dump(), "source": "rule"}
@@ -256,6 +278,8 @@ def _execute_workbench_payload(
             else (str(target_output)[:10000] if target_output else "")
         ),
         duration_ms=elapsed_ms,
+        model_version=model_version,
+        data_quality_score=data_quality["score"],
     )
     db.add(db_run)
     db.commit()
@@ -278,6 +302,8 @@ def _execute_workbench_payload(
         "target_output": target_output,
         "duration_ms": elapsed_ms,
         "stages": stages,
+        "model_version": model_version,
+        "data_quality": data_quality,
     }
 
 @workbench_router.get("/health")
@@ -630,7 +656,9 @@ def list_test_runs(limit: int = 50, db: Session = Depends(get_db)):
             "total_score": r.total_score,
             "grade": r.grade,
             "summary": r.summary,
-            "duration_ms": r.duration_ms
+            "duration_ms": r.duration_ms,
+            "model_version": r.model_version,
+            "data_quality_score": r.data_quality_score,
         }
         for r in runs
     ]
@@ -668,7 +696,9 @@ def get_test_run_detail(run_id: str, db: Session = Depends(get_db)):
         "raw_preview": r.raw_preview,
         "canonical_preview": r.canonical_preview,
         "target_preview": r.target_preview,
-        "duration_ms": r.duration_ms
+        "duration_ms": r.duration_ms,
+        "model_version": r.model_version,
+        "data_quality_score": r.data_quality_score,
     }
 
 
