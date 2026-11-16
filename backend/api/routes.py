@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from pydantic import BaseModel
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
@@ -21,6 +22,7 @@ from backend.db.database import (
 from backend.adapters.registry import get_adapter, list_registered_vendors
 from backend.engine.validator import ValidationEngine
 from backend.engine.scorer import ScoringEngine, DiagnosticSuggester
+from backend.engine.report_builder import build_run_report
 from backend.generator.simulator import SyntheticAmiGenerator
 from backend.models.canonical import (
     CanonicalPayload,
@@ -250,7 +252,13 @@ def _execute_workbench_payload(
     model_version = _ml_model_version()
 
     findings = [
-        {**issue.model_dump(), "source": "rule"}
+        {
+            **issue.model_dump(),
+            "source": "rule",
+            "confidence": 1.0,
+            "confidence_source": "deterministic_rule",
+            "explanation": issue.message,
+        }
         for issue in all_issues
     ] + ml_findings
     elapsed_ms = round((time.time() - start_time) * 1000.0, 2)
@@ -699,7 +707,21 @@ def get_test_run_detail(run_id: str, db: Session = Depends(get_db)):
         "duration_ms": r.duration_ms,
         "model_version": r.model_version,
         "data_quality_score": r.data_quality_score,
+        "report_url": f"/api/test-runs/{r.run_id}/report.html",
     }
+
+
+@workbench_router.get("/test-runs/{run_id}/report.html", response_class=HTMLResponse)
+def export_test_run_report(run_id: str, db: Session = Depends(get_db)):
+    """Exportable HTML conformance report built from one stored run."""
+    run = db.query(DBTestRun).filter(DBTestRun.run_id == run_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail=f"Test run {run_id} not found.")
+    try:
+        issues = json.loads(run.issues_json or "[]")
+    except json.JSONDecodeError:
+        issues = []
+    return HTMLResponse(build_run_report(run, issues))
 
 
 router.include_router(workbench_router)

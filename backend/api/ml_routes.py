@@ -5,12 +5,15 @@ import json
 from typing import Any, Union
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from backend.engine.history_analytics import build_meter_profile
 from backend.db.database import DBMeterHistory, get_db
 from app.ml.inference import (
     MLArtifactsError,
+    explain_canonical_readings,
     get_ml_health,
     make_ml_findings,
     predict_canonical_readings,
@@ -40,6 +43,10 @@ class CanonicalReadingInput(BaseModel):
 
 class BatchValidationInput(BaseModel):
     readings: list[CanonicalReadingInput]
+
+
+class ExplanationInput(BaseModel):
+    readings: list[CanonicalReadingInput] = Field(..., min_length=1)
 
 
 def _unavailable(error: MLArtifactsError) -> HTTPException:
@@ -132,5 +139,82 @@ def validate_reading_batch(batch: BatchValidationInput, db: Session = Depends(ge
     return {
         "predictions": predictions,
         "findings": make_ml_findings(predictions),
+        "is_synthetic": is_synthetic,
+    }
+
+
+@router.get("/meters")
+def list_meters_with_history(db: Session = Depends(get_db)):
+    """Meters that currently have stored readings, newest arrival first."""
+    counts = dict(
+        db.query(DBMeterHistory.meter_id, func.count(DBMeterHistory.id))
+        .group_by(DBMeterHistory.meter_id)
+        .all()
+    )
+    if not counts:
+        return []
+    latest_ids = dict(
+        db.query(DBMeterHistory.meter_id, func.max(DBMeterHistory.id))
+        .group_by(DBMeterHistory.meter_id)
+        .all()
+    )
+    latest_rows = {
+        row.meter_id: row
+        for row in db.query(DBMeterHistory)
+        .filter(DBMeterHistory.id.in_(list(latest_ids.values())))
+        .all()
+    }
+    meters = []
+    for meter_id, count in counts.items():
+        row = latest_rows.get(meter_id)
+        meters.append(
+            {
+                "meter_id": meter_id,
+                "reading_count": count,
+                "last_arrival_id": row.id if row else None,
+                "last_ts": row.ts if row else None,
+            }
+        )
+    meters.sort(key=lambda item: item["last_arrival_id"] or 0, reverse=True)
+    return meters
+
+
+@router.get("/meters/{meter_id}/profile")
+def meter_profile(meter_id: str, db: Session = Depends(get_db)):
+    """Behaviour profile and arrival-order drift for one meter's stored history."""
+    rows = (
+        db.query(DBMeterHistory)
+        .filter(DBMeterHistory.meter_id == meter_id)
+        .order_by(DBMeterHistory.id.asc())
+        .all()
+    )
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No stored history for meter '{meter_id}'. Submit readings to "
+                "/ml/validate or /ml/validate-batch first."
+            ),
+        )
+    payloads = [json.loads(row.payload_json) for row in rows]
+    return build_meter_profile(
+        meter_id,
+        payloads,
+        first_arrival_id=rows[0].id,
+        last_arrival_id=rows[-1].id,
+    )
+
+
+@router.post("/explain")
+def explain_reading_batch(batch: ExplanationInput):
+    """SHAP feature contributions from the saved classifier (no retraining)."""
+    try:
+        explanations = explain_canonical_readings(batch.readings)
+        is_synthetic = get_ml_health()["is_synthetic"]
+    except MLArtifactsError as error:
+        raise _unavailable(error) from error
+    return {
+        "method": "shap_tree_explainer",
+        "explanations": explanations,
         "is_synthetic": is_synthetic,
     }

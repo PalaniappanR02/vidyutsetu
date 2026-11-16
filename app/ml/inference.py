@@ -8,6 +8,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+import numpy as np
+
 
 ARTIFACTS_DIR = Path(__file__).resolve().parent / "artifacts"
 MODEL_FILES = {
@@ -155,6 +157,7 @@ def make_ml_findings(predictions: Sequence[Mapping[str, Any]]) -> list[dict[str,
     findings: list[dict[str, Any]] = []
     for prediction in predictions:
         index = prediction["reading_index"]
+        confidence = float(prediction["fault_confidence"])
         if prediction["fault_type"] != "VALID":
             findings.append(
                 {
@@ -163,8 +166,16 @@ def make_ml_findings(predictions: Sequence[Mapping[str, Any]]) -> list[dict[str,
                     "severity": "WARNING",
                     "message": (
                         f"ML classifier predicted {prediction['fault_type']} "
-                        f"(confidence {prediction['fault_confidence']:.3f})."
+                        f"(confidence {confidence:.3f})."
                     ),
+                    "explanation": (
+                        f"The learned fault classifier (trained on synthetic data) "
+                        f"assigned {prediction['fault_type']} with probability "
+                        f"{confidence:.3f}. It screens for review; it does not decide "
+                        f"conformance and does not override rule results."
+                    ),
+                    "confidence": confidence,
+                    "confidence_source": "fault_classifier_probability",
                     "observed_value": dict(prediction),
                     "source": "ml",
                 }
@@ -176,8 +187,74 @@ def make_ml_findings(predictions: Sequence[Mapping[str, Any]]) -> list[dict[str,
                     "field": f"readings[{index}]",
                     "severity": "WARNING",
                     "message": "Flagged by the high-recall ML anomaly screen; review is recommended.",
+                    "explanation": (
+                        "The IsolationForest screen flagged this reading for review. "
+                        "The stated confidence is the fault classifier's probability for "
+                        "the same reading; this is a screening indicator, not a confirmed "
+                        "fault."
+                    ),
+                    "confidence": confidence,
+                    "confidence_source": "fault_classifier_probability",
                     "observed_value": dict(prediction),
                     "source": "ml",
                 }
             )
     return findings
+
+
+@lru_cache(maxsize=2)
+def _load_shap_explainer(artifacts_dir: str) -> Any:
+    """Build a SHAP tree explainer over the *existing* classifier (no retraining)."""
+    import shap
+
+    classifier, _detector, _label_encoder, _schema, _metrics = _load_models(artifacts_dir)
+    return shap.TreeExplainer(classifier.named_steps["classifier"])
+
+
+def explain_canonical_readings(
+    readings: Sequence[Any], top_k: int = 3
+) -> list[dict[str, Any]]:
+    """SHAP contributions for the predicted class of each reading.
+
+    Explains the saved XGBoost classifier only; nothing is retrained and the
+    artifact files are opened read-only.
+    """
+    if not readings:
+        return []
+
+    classifier, _detector, label_encoder, _schema, _metrics = _load_models(
+        str(ARTIFACTS_DIR.resolve())
+    )
+    explainer = _load_shap_explainer(str(ARTIFACTS_DIR.resolve()))
+    preprocessor = classifier.named_steps["preprocessor"]
+    records = [canonical_reading_to_features(reading) for reading in readings]
+    transformed = preprocessor.transform(records)
+    feature_names = list(preprocessor.get_feature_names_out())
+    contributions = np.asarray(explainer.shap_values(transformed))
+    if contributions.ndim == 2:
+        contributions = contributions[:, :, np.newaxis]
+
+    encoded_predictions = classifier.predict(records)
+    classifier_classes = list(classifier.named_steps["classifier"].classes_)
+    explanations: list[dict[str, Any]] = []
+    for index, (encoded, record) in enumerate(zip(encoded_predictions, records, strict=True)):
+        class_position = classifier_classes.index(encoded)
+        per_feature = contributions[index][:, class_position]
+        order = np.argsort(-np.abs(per_feature))[:top_k]
+        explanations.append(
+            {
+                "reading_index": index,
+                "meter_serial_number": record.get("meter_id"),
+                "predicted_fault_type": str(
+                    label_encoder.inverse_transform([int(encoded)])[0]
+                ),
+                "top_features": [
+                    {
+                        "feature": feature_names[position],
+                        "contribution": float(per_feature[position]),
+                    }
+                    for position in order
+                ],
+            }
+        )
+    return explanations
