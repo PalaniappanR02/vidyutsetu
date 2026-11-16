@@ -45,8 +45,14 @@ def serve_dashboard():
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return {
-        "message": "VidyutSetu API is running. Build static UI in backend/static/index.html to view dashboard."
+        "message": "VidyutSetu API is running. Build the landing page in backend/static/index.html to view it."
     }
+
+
+@app.get("/dashboard")
+def serve_workbench():
+    dashboard_path = os.path.join(STATIC_DIR, "dashboard.html")
+    return FileResponse(dashboard_path)
 
 
 @app.get("/health")
