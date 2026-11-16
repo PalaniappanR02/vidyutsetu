@@ -5,8 +5,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
-from backend.db.database import init_db
+from backend.db.database import engine, init_db
 from backend.api.routes import router as api_router
 from backend.api.ml_routes import router as ml_router
 
@@ -45,3 +47,14 @@ def serve_dashboard():
     return {
         "message": "VidyutSetu API is running. Build static UI in backend/static/index.html to view dashboard."
     }
+
+
+@app.get("/health")
+def health_check():
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        db_status = "ok"
+    except SQLAlchemyError:
+        db_status = "error"
+    return {"status": "ok", "version": "0.1.0", "db": db_status}

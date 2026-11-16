@@ -35,7 +35,11 @@ from app.ml.inference import (
     predict_canonical_readings,
 )
 
-router = APIRouter(prefix="/api", tags=["Workbench API"])
+router = APIRouter()
+workbench_router = APIRouter(prefix="/api", tags=["workbench"])
+compare_router = APIRouter(prefix="/api", tags=["compare"])
+roundtrip_router = APIRouter(prefix="/api", tags=["roundtrip"])
+suites_router = APIRouter(prefix="/api", tags=["suites"])
 
 PARSE_DIAGNOSTIC_CODES = {
     "JSON_PARSE_ERROR",
@@ -276,7 +280,7 @@ def _execute_workbench_payload(
         "stages": stages,
     }
 
-@router.get("/health")
+@workbench_router.get("/health")
 def health_check():
     return {
         "status": "healthy",
@@ -286,7 +290,7 @@ def health_check():
     }
 
 
-@router.get("/stats")
+@workbench_router.get("/stats")
 def get_workbench_stats(db: Session = Depends(get_db)):
     total_runs = db.query(DBTestRun).count()
     runs = db.query(DBTestRun).order_by(desc(DBTestRun.execution_time)).limit(100).all()
@@ -319,7 +323,7 @@ def get_workbench_stats(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/vendors")
+@workbench_router.get("/vendors")
 def get_vendors(db: Session = Depends(get_db)):
     registered = list_registered_vendors()
     # Check if there are database overrides
@@ -336,7 +340,7 @@ def get_vendors(db: Session = Depends(get_db)):
     return out
 
 
-@router.post("/generate")
+@workbench_router.post("/generate")
 def generate_synthetic_data(
     vendor_id: str = Query(..., description="Target vendor format: alpha-hes, beta-hes, gamma-mdms, delta-legacy, or canonical"),
     meter_count: int = Query(3, ge=1, le=20),
@@ -371,7 +375,7 @@ def generate_synthetic_data(
     }
 
 
-@router.post("/workbench/execute")
+@workbench_router.post("/workbench/execute")
 async def execute_interoperability_test(
     source_vendor: str = Form(...),
     target_vendor: Optional[str] = Form(None),
@@ -391,7 +395,7 @@ async def execute_interoperability_test(
     return _execute_workbench_payload(source_vendor, target_vendor, content_str, db)
 
 
-@router.post("/compare")
+@compare_router.post("/compare")
 def compare_test_runs(request: CompareRunsInput, db: Session = Depends(get_db)):
     baseline = (
         db.query(DBTestRun).filter(DBTestRun.run_id == request.baseline_run_id).first()
@@ -451,7 +455,7 @@ def compare_test_runs(request: CompareRunsInput, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/roundtrip")
+@roundtrip_router.post("/roundtrip")
 def roundtrip_payload(request: RoundTripInput):
     source_adapter = get_adapter(request.vendor_a)
     target_adapter = get_adapter(request.vendor_b)
@@ -513,7 +517,7 @@ def roundtrip_payload(request: RoundTripInput):
     }
 
 
-@router.post("/suites")
+@suites_router.post("/suites")
 def create_test_suite(request: SuiteCreateInput, db: Session = Depends(get_db)):
     if not request.name.strip():
         raise HTTPException(status_code=422, detail="Suite name must not be empty.")
@@ -532,7 +536,7 @@ def create_test_suite(request: SuiteCreateInput, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/suites")
+@suites_router.get("/suites")
 def list_test_suites(db: Session = Depends(get_db)):
     suites = db.query(DBTestSuite).order_by(DBTestSuite.id.desc()).all()
     return [
@@ -546,7 +550,7 @@ def list_test_suites(db: Session = Depends(get_db)):
     ]
 
 
-@router.post("/suites/{suite_id}/run")
+@suites_router.post("/suites/{suite_id}/run")
 def run_test_suite(suite_id: int, db: Session = Depends(get_db)):
     suite = db.query(DBTestSuite).filter(DBTestSuite.id == suite_id).first()
     if not suite:
@@ -611,7 +615,7 @@ def run_test_suite(suite_id: int, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/test-runs")
+@workbench_router.get("/test-runs")
 def list_test_runs(limit: int = 50, db: Session = Depends(get_db)):
     runs = db.query(DBTestRun).order_by(desc(DBTestRun.execution_time)).limit(limit).all()
     return [
@@ -632,7 +636,7 @@ def list_test_runs(limit: int = 50, db: Session = Depends(get_db)):
     ]
 
 
-@router.get("/test-runs/{run_id}")
+@workbench_router.get("/test-runs/{run_id}")
 def get_test_run_detail(run_id: str, db: Session = Depends(get_db)):
     r = db.query(DBTestRun).filter(DBTestRun.run_id == run_id).first()
     if not r:
@@ -666,3 +670,9 @@ def get_test_run_detail(run_id: str, db: Session = Depends(get_db)):
         "target_preview": r.target_preview,
         "duration_ms": r.duration_ms
     }
+
+
+router.include_router(workbench_router)
+router.include_router(compare_router)
+router.include_router(roundtrip_router)
+router.include_router(suites_router)

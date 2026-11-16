@@ -16,7 +16,7 @@ from app.ml.inference import (
     predict_canonical_readings,
 )
 
-router = APIRouter(prefix="/ml", tags=["ML"])
+router = APIRouter(prefix="/ml", tags=["ml"])
 
 NumericInput = Union[float, str, None]
 TimestampInput = Union[datetime, str, None]
