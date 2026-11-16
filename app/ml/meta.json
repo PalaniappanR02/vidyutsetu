@@ -1,0 +1,28 @@
+{
+  "model_type": "IsolationForest",
+  "features": [
+    "active_energy_wh",
+    "voltage_v",
+    "current_a",
+    "power_factor",
+    "frequency_hz",
+    "interval_minutes",
+    "ts_gap_seconds"
+  ],
+  "contamination": 0.2,
+  "n_estimators": 200,
+  "label": "ml",
+  "version": "1.0.0",
+  "trained_on": "synthetic_ami_telemetry",
+  "standards": [
+    "IEC61968-9",
+    "DLMS/COSEM",
+    "IS15959"
+  ],
+  "vendors_covered": [
+    "alpha",
+    "beta",
+    "gamma",
+    "delta"
+  ]
+}
