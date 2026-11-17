@@ -3,6 +3,9 @@
 import pytest
 from datetime import datetime, timezone
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import SQLAlchemyError
+
+import backend.main as main
 from backend.main import app
 from backend.models.canonical import CanonicalPayload, CanonicalMeterReading
 from backend.engine.validator import ValidationEngine
@@ -41,6 +44,38 @@ def test_api_health(client):
     res = client.get("/api/health")
     assert res.status_code == 200
     assert res.json()["status"] == "healthy"
+
+
+def test_root_static_ui_and_service_health(client):
+    root = client.get("/")
+    assert root.status_code == 200
+    assert "text/html" in root.headers["content-type"]
+    assert client.get("/static/app.js").status_code == 200
+
+    health = client.get("/health")
+    assert health.status_code == 200
+    assert health.json() == {"status": "ok", "version": "0.1.0", "db": "ok"}
+
+
+def test_service_health_reports_database_error(client, monkeypatch):
+    class UnavailableEngine:
+        def connect(self):
+            raise SQLAlchemyError("database unavailable")
+
+    monkeypatch.setattr(main, "engine", UnavailableEngine())
+
+    health = client.get("/health")
+    assert health.status_code == 200
+    assert health.json() == {"status": "ok", "version": "0.1.0", "db": "error"}
+
+
+def test_openapi_routes_use_category_tags(client):
+    paths = client.get("/openapi.json").json()["paths"]
+    assert paths["/api/workbench/execute"]["post"]["tags"] == ["workbench"]
+    assert paths["/ml/validate"]["post"]["tags"] == ["ml"]
+    assert paths["/api/suites"]["post"]["tags"] == ["suites"]
+    assert paths["/api/compare"]["post"]["tags"] == ["compare"]
+    assert paths["/api/roundtrip"]["post"]["tags"] == ["roundtrip"]
 
 
 def test_api_stats(client):

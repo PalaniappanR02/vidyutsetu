@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VidyutSetu — AMI Interoperability Workbench</title>
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="/static/icon-light-32x32.png" sizes="32x32" media="(prefers-color-scheme: light)">
+  <link rel="icon" href="/static/icon-dark-32x32.png" sizes="32x32" media="(prefers-color-scheme: dark)">
+  <link rel="apple-touch-icon" href="/static/apple-icon.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --vs-bg: #F4F8FB;
+      --vs-surface: #FFFFFF;
+      --vs-surface-alt: #EAF2F8;
+      --vs-line: #D6E3EE;
+      --vs-line-strong: #C3D6E6;
+      --vs-ink: #13263B;
+      --vs-navy: #0B2545;
+      --vs-body: #33506B;
+      --vs-muted: #5B7288;
+      --vs-teal: #0E9AA7;
+      --vs-teal-deep: #0B7C87;
+      --vs-teal-tint: #E3F4F6;
+      --vs-cyan: #19C2D0;
+      --vs-amber: #F59E0B;
+      --vs-amber-tint: #FFF4E0;
+      --vs-amber-ink: #8A5A00;
+      --vs-red: #B3261E;
+      --vs-red-tint: #FDECEA;
+      --vs-code-bg: #0B2545;
+      --vs-code-ink: #DFF1F4;
+      --vs-shadow: 0 1px 2px rgba(11, 37, 69, .06);
+    }
+    [data-theme="dark"] {
+      --vs-bg: #071A33;
+      --vs-surface: #0B2545;
+      --vs-surface-alt: #0F3054;
+      --vs-line: #1D4570;
+      --vs-line-strong: #2A5A8C;
+      --vs-ink: #F1F7FB;
+      --vs-body: #C9DDEB;
+      --vs-muted: #9DB6CA;
+      --vs-teal-tint: #0F3B45;
+      --vs-amber-tint: #3A2A08;
+      --vs-amber-ink: #FFD79A;
+      --vs-red-tint: #3A1512;
+      --vs-code-bg: #04101F;
+      --vs-shadow: 0 1px 2px rgba(0, 0, 0, .4);
+    }
+    html, body { background: var(--vs-bg); color: var(--vs-ink); }
+    body { font-family: "Segoe UI", Inter, system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--vs-surface-alt); }
+    ::-webkit-scrollbar-thumb { background: var(--vs-line-strong); border-radius: 4px; }
+
+    :focus-visible { outline: 3px solid var(--vs-teal); outline-offset: 2px; border-radius: 4px; }
+
+    .card { background: var(--vs-surface); border: 1px solid var(--vs-line); border-radius: 14px; box-shadow: var(--vs-shadow); }
+    .card-pad { padding: 1.25rem 1.5rem; }
+    .label { font-size: .72rem; color: var(--vs-muted); }
+    .muted { color: var(--vs-muted); }
+    .body-text { color: var(--vs-body); }
+    .hairline { border-color: var(--vs-line); }
+
+    .stat-value { font-size: 1.9rem; font-weight: 800; color: var(--vs-navy); line-height: 1.1; }
+    [data-theme="dark"] .stat-value { color: var(--vs-ink); }
+    .stat-hint { font-size: .72rem; color: var(--vs-muted); margin-top: .35rem; }
+
+    .pill { display: inline-flex; align-items: center; gap: .3rem; padding: .15rem .5rem; border-radius: 999px;
+            font-size: .7rem; font-weight: 600; border: 1px solid var(--vs-line-strong); color: var(--vs-body);
+            background: var(--vs-surface-alt); white-space: nowrap; }
+    .pill-teal { background: var(--vs-teal-tint); color: var(--vs-teal-deep); border-color: var(--vs-teal); }
+    .pill-amber { background: var(--vs-amber-tint); color: var(--vs-amber-ink); border-color: var(--vs-amber); }
+    .pill-red { background: var(--vs-red-tint); color: var(--vs-red); border-color: var(--vs-red); }
+    .pill-navy { background: var(--vs-navy); color: #fff; border-color: var(--vs-navy); }
+
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; border-radius: 10px;
+           font-size: .82rem; font-weight: 600; padding: .5rem .9rem; border: 1px solid var(--vs-line-strong);
+           background: var(--vs-surface); color: var(--vs-body); cursor: pointer; }
+    .btn:hover { background: var(--vs-surface-alt); }
+    .btn-primary { background: var(--vs-teal-deep); border-color: var(--vs-teal-deep); color: #fff; }
+    .btn-primary:hover { background: #096B75; }
+    .btn-cta { background: var(--vs-amber); border-color: var(--vs-amber); color: #3B2600; }
+    .btn-cta:hover { background: #DD8C05; }
+    .btn[disabled] { opacity: .6; cursor: progress; }
+
+    .input, .select, textarea {
+      width: 100%; background: var(--vs-surface); color: var(--vs-ink);
+      border: 1px solid var(--vs-line-strong); border-radius: 10px; padding: .5rem .7rem; font-size: .85rem;
+    }
+    .code, textarea.code, pre.code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background: var(--vs-code-bg); color: var(--vs-code-ink); border: 1px solid var(--vs-line-strong);
+      border-radius: 10px;
+    }
+    textarea.code { background: var(--vs-surface); color: var(--vs-ink); }
+    pre.code { padding: .9rem; font-size: .74rem; overflow: auto; max-height: 20rem; line-height: 1.5; }
+
+    table.vs { width: 100%; border-collapse: collapse; font-size: .8rem; }
+    table.vs th { text-align: left; font-size: .68rem; letter-spacing: .04em; text-transform: uppercase;
+                  color: var(--vs-muted); border-bottom: 1px solid var(--vs-line); padding: .55rem .6rem; white-space: nowrap; }
+    table.vs td { padding: .55rem .6rem; border-bottom: 1px solid var(--vs-line); color: var(--vs-body); vertical-align: top; }
+    table.vs tbody tr:hover { background: var(--vs-surface-alt); }
+
+    .bar { height: 7px; background: var(--vs-surface-alt); border-radius: 999px; overflow: hidden; }
+    .bar > span { display: block; height: 100%; background: var(--vs-teal); border-radius: 999px; }
+
+    .stage { border: 1px solid var(--vs-line); border-radius: 10px; padding: .7rem .85rem; background: var(--vs-surface); }
+    .stage-name { font-weight: 700; font-size: .82rem; color: var(--vs-ink); }
+    .stage-meta { font-size: .72rem; color: var(--vs-muted); }
+
+    .tag { display: inline-block; padding: .05rem .35rem; border-radius: 4px; font-size: .65rem; font-weight: 700;
+           letter-spacing: .03em; text-transform: uppercase; border: 1px solid transparent; }
+    .tag-rule { background: var(--vs-surface-alt); color: var(--vs-body); border-color: var(--vs-line-strong); }
+    .tag-ml { background: var(--vs-amber-tint); color: var(--vs-amber-ink); border-color: var(--vs-amber); }
+
+    .heat { border-collapse: separate; border-spacing: 4px; }
+    .heat th { font-size: .68rem; color: var(--vs-muted); font-weight: 600; text-align: left; padding: 0 .35rem; }
+    .heat th.band, .heat td.band { text-align: center; }
+    .heat td { width: 62px; height: 40px; text-align: center; vertical-align: middle; font-size: .78rem;
+               font-weight: 700; border-radius: 8px; border: 1px solid var(--vs-line); color: var(--vs-ink); }
+
+    .notice { border-left: 4px solid var(--vs-amber); background: var(--vs-amber-tint); color: var(--vs-amber-ink);
+              padding: .65rem .8rem; border-radius: 8px; font-size: .76rem; }
+    .notice-info { border-left-color: var(--vs-teal); background: var(--vs-teal-tint); color: var(--vs-teal-deep); }
+
+    .nav-tab { padding: .4rem .7rem; border-radius: 8px; font-size: .8rem; font-weight: 600; color: #C9DDEB; white-space: nowrap; }
+    .nav-tab:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+    .nav-tab[aria-selected="true"] { background: var(--vs-teal-deep); color: #fff; }
+
+    a.link { color: var(--vs-teal-deep); text-decoration: underline; text-underline-offset: 2px; }
+    [data-theme="dark"] a.link { color: #7FE3EC; }
+
+    /* Keep scroll-into-view targets clear of the sticky header. */
+    #results-container, #view-workbench, #view-overview > .card, #diagnostics-card { scroll-margin-top: 7rem; }
+
+    @media (max-width: 768px) {
+      /* One scrollable tab row, so the sticky header does not eat the viewport. */
+      nav[role="tablist"] {
+        flex-wrap: nowrap; overflow-x: auto; width: 100%;
+        scrollbar-width: none; -ms-overflow-style: none;
+      }
+      nav[role="tablist"]::-webkit-scrollbar { display: none; }
+      header > div { padding-left: .85rem; padding-right: .85rem; }
+      .card-pad { padding: 1rem 1.05rem; }
+      #results-container, #view-workbench, #view-overview > .card, #diagnostics-card { scroll-margin-top: 8.5rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+                               transition-duration: .01ms !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+  <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to content</a>
+
+  <header style="background: var(--vs-navy);" class="sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <span style="background:#fff;border-radius:10px;padding:3px 7px;display:inline-flex;align-items:center">
+          <img src="/static/VidyutSetu_Logo.png" alt="VidyutSetu logo" style="height:30px;width:auto">
+        </span>
+        <div>
+          <p class="text-white font-bold text-lg leading-tight">vidyut<span style="color:#7FE3EC">setu</span></p>
+          <p class="text-xs" style="color:#A9C4D8">AMI interoperability and conformance workbench</p>
+        </div>
+      </div>
+
+      <nav class="flex items-center gap-1 flex-wrap" role="tablist" aria-label="Workbench sections">
+        <button role="tab" aria-selected="true" id="tab-btn-overview" class="nav-tab" onclick="switchTab('overview')">Overview</button>
+        <button role="tab" aria-selected="false" id="tab-btn-workbench" class="nav-tab" onclick="switchTab('workbench')">Workbench</button>
+        <button role="tab" aria-selected="false" id="tab-btn-mapping" class="nav-tab" onclick="switchTab('mapping')">Mapping</button>
+        <button role="tab" aria-selected="false" id="tab-btn-compare" class="nav-tab" onclick="switchTab('compare')">Compare</button>
+        <button role="tab" aria-selected="false" id="tab-btn-roundtrip" class="nav-tab" onclick="switchTab('roundtrip')">Roundtrip</button>
+        <button role="tab" aria-selected="false" id="tab-btn-suites" class="nav-tab" onclick="switchTab('suites')">Suites</button>
+        <button role="tab" aria-selected="false" id="tab-btn-vendors" class="nav-tab" onclick="switchTab('vendors')">Vendors</button>
+        <button role="tab" aria-selected="false" id="tab-btn-history" class="nav-tab" onclick="switchTab('history')">History</button>
+        <button role="tab" aria-selected="false" id="tab-btn-standards" class="nav-tab" onclick="switchTab('standards')">Standards</button>
+      </nav>
+
+      <div class="flex items-center gap-2">
+        <span class="pill" id="standards-badge" style="background:rgba(255,255,255,.12);color:#DFF1F4;border-color:rgba(255,255,255,.25)">
+          <span style="width:7px;height:7px;border-radius:999px;background:#19C2D0;display:inline-block"></span>
+          IEC 61968-9 aligned
+        </span>
+        <a href="/" class="nav-tab">Landing page</a>
+        <button id="theme-toggle" class="nav-tab" onclick="toggleTheme()" aria-label="Switch colour theme">Dark theme</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="flex-1 w-full max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- OVERVIEW -->
+    <section id="view-overview" class="tab-view space-y-6" role="tabpanel" aria-labelledby="tab-btn-overview">
+      <div id="getting-started" class="card card-pad">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div class="max-w-2xl">
+            <h2 class="font-bold" style="color:var(--vs-ink)">New here? Run one sample first</h2>
+            <p class="text-sm body-text mt-1">
+              A sample takes one click: it loads synthetic telemetry for a chosen vendor format, runs
+              all five pipeline stages, and shows you a real result. Nothing you see is customer data.
+            </p>
+            <ol class="text-xs body-text mt-2 space-y-1 list-decimal pl-4">
+              <li>Choose source and target systems (or keep the defaults).</li>
+              <li>Load a sample payload, generate one, or paste your own.</li>
+              <li>Run validation and read the verdict, stages and diagnostics.</li>
+            </ol>
+          </div>
+          <div class="flex flex-col gap-2">
+            <button class="btn btn-cta" onclick="runSampleValidation()">
+              <i data-lucide="sparkles" class="w-4 h-4"></i><span>Try sample validation</span>
+            </button>
+            <button class="btn" onclick="switchTab('workbench')">Open workbench</button>
+            <button class="btn" onclick="dismissGettingStarted()">I know my way around</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="card card-pad">
+          <p class="label">Test executions</p>
+          <p class="stat-value" id="stat-total-runs">0</p>
+          <p class="stat-hint" id="stat-total-runs-hint">No runs recorded yet — start one in Workbench.</p>
+        </div>
+        <div class="card card-pad">
+          <p class="label">Average interoperability score</p>
+          <p class="stat-value" id="stat-avg-score">0%</p>
+          <p class="stat-hint" id="stat-avg-score-hint">Available after your first run.</p>
+        </div>
+        <div class="card card-pad">
+          <p class="label">Active adapters</p>
+          <p class="stat-value" id="stat-adapters">0</p>
+          <p class="stat-hint">Alpha, Beta, Gamma, Delta</p>
+        </div>
+        <div class="card card-pad">
+          <p class="label">ML fault screening</p>
+          <p class="stat-value" id="ml-headline-accuracy">0%</p>
+          <p class="stat-hint">
+            <span class="pill pill-amber" id="ml-synthetic-badge">Trained on synthetic data</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="card card-pad lg:col-span-2">
+          <div class="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h2 class="font-bold" style="color:var(--vs-ink)">ML fault screening status</h2>
+              <p class="label">Read from <code>/ml/health</code> and the saved artifact metadata. Screening only — rules stay authoritative.</p>
+            </div>
+            <button class="btn" onclick="loadMlHealth()">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i><span>Refresh</span>
+            </button>
+          </div>
+          <div id="ml-screening-body" class="space-y-3 text-sm body-text">
+            <p class="muted">Loading model metadata…</p>
+          </div>
+          <div class="notice mt-3">
+            The fault classifier and anomaly screen were trained on <strong>synthetic</strong> AMI telemetry. They flag readings for review and need meter reading history to be meaningful; they do not certify compliance.
+          </div>
+        </div>
+
+        <div class="card card-pad">
+          <h2 class="font-bold mb-1" style="color:var(--vs-ink)">Score distribution</h2>
+          <p class="label mb-3">Stored runs per vendor and score band — built from real run records.</p>
+          <div id="heatmap-body" class="overflow-x-auto"><p class="muted text-sm">Loading runs…</p></div>
+          <p class="stat-hint mt-3" id="heatmap-caption"></p>
+        </div>
+      </div>
+
+      <div class="card card-pad">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-bold" style="color:var(--vs-ink)">Recent runs</h2>
+          <button class="btn" onclick="refreshDashboard()">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i><span>Refresh</span>
+          </button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="vs">
+            <thead>
+              <tr>
+                <th>Run</th><th>Executed</th><th>Source</th><th>Target</th>
+                <th>Records</th><th>Score</th><th>Grade</th><th>Report</th>
+              </tr>
+            </thead>
+            <tbody id="recent-runs-table-body">
+              <tr><td colspan="8" class="muted">No runs yet. Open Workbench to execute the first validation.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- WORKBENCH -->
+    <section id="view-workbench" class="tab-view hidden space-y-6" role="tabpanel" aria-labelledby="tab-btn-workbench">
+      <div class="card card-pad">
+        <div class="flex flex-wrap items-start justify-between gap-3 mb-5">
+          <div>
+            <h2 class="font-bold" style="color:var(--vs-ink)">AMI interoperability test configuration</h2>
+            <p class="label">Choose vendor formats, paste a payload or generate synthetic telemetry, then run the five-stage pipeline.</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button class="btn btn-cta" onclick="runSampleValidation()">Try sample validation</button>
+            <button class="btn" onclick="loadSamplePreset('alpha-hes')">Alpha sample</button>
+            <button class="btn" onclick="loadSamplePreset('beta-hes')">Beta sample</button>
+            <button class="btn" onclick="loadSamplePreset('gamma-mdms')">Gamma sample</button>
+            <button class="btn" onclick="loadSamplePreset('delta-legacy')">Delta sample</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="space-y-4">
+            <div>
+              <label class="label" for="source-vendor-select">Source vendor format (ingestion)</label>
+              <select id="source-vendor-select" class="select mt-1">
+                <option value="alpha-hes">Alpha HES — DLMS/COSEM OBIS IS 15959 (JSON)</option>
+                <option value="beta-hes">Beta HES — proprietary flat load survey (CSV)</option>
+                <option value="gamma-mdms">Gamma MDMS — CIM IEC 61968-9 (JSON)</option>
+                <option value="delta-legacy">Delta HES — legacy proprietary milli-units (JSON)</option>
+              </select>
+            </div>
+
+            <div class="p-4 rounded-xl space-y-3" style="background:var(--vs-surface-alt);border:1px solid var(--vs-line)">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs font-bold" style="color:var(--vs-body)">Synthetic AMI data generator</span>
+                <button class="btn-cta btn" onclick="generateSyntheticIntoWorkbench()">Generate payload</button>
+              </div>
+              <div class="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label class="label" for="gen-meters">Meters</label>
+                  <input type="number" id="gen-meters" value="3" min="1" max="10" class="input mt-1">
+                </div>
+                <div>
+                  <label class="label" for="gen-intervals">Intervals per meter</label>
+                  <input type="number" id="gen-intervals" value="4" min="1" max="24" class="input mt-1">
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-4 text-xs body-text">
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" id="gen-inject-anomalies" class="rounded"> Inject electrical anomalies
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" id="gen-inject-tampers" class="rounded"> Inject tamper alarms
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex justify-between items-center">
+                <label class="label" for="raw-payload-input">Raw payload</label>
+                <span class="label">JSON or CSV</span>
+              </div>
+              <textarea id="raw-payload-input" rows="12" class="code mt-1" placeholder="Paste a raw vendor payload, or generate one above."></textarea>
+            </div>
+          </div>
+
+          <div class="space-y-4 flex flex-col justify-between">
+            <div class="space-y-4">
+              <div>
+                <label class="label" for="target-vendor-select">Target destination system</label>
+                <select id="target-vendor-select" class="select mt-1">
+                  <option value="gamma-mdms">Gamma MDMS — CIM IEC 61968-9 (JSON)</option>
+                  <option value="alpha-hes">Alpha HES — DLMS/COSEM OBIS IS 15959 (JSON)</option>
+                  <option value="beta-hes">Beta HES — proprietary flat load survey (CSV)</option>
+                  <option value="delta-legacy">Delta HES — legacy proprietary milli-units (JSON)</option>
+                  <option value="none">Validate only (no target output)</option>
+                </select>
+              </div>
+
+              <div class="rounded-xl p-5 text-center" style="border:2px dashed var(--vs-line-strong);background:var(--vs-surface-alt)">
+                <i data-lucide="upload-cloud" class="w-7 h-7 mx-auto mb-2" style="color:var(--vs-muted)"></i>
+                <label class="text-xs font-medium body-text block" for="file-upload-input">Or upload a JSON/CSV payload file</label>
+                <input type="file" id="file-upload-input" class="text-xs mt-2 mx-auto">
+              </div>
+
+              <div class="p-4 rounded-xl text-xs space-y-2" style="background:var(--vs-surface-alt);border:1px solid var(--vs-line)">
+                <p class="font-bold" style="color:var(--vs-body)">Checks run on ingestion</p>
+                <ul class="space-y-1 muted pl-4 list-disc">
+                  <li>Parse, then syntactic envelope checks</li>
+                  <li>IS 15959 / IEC 62056 OBIS mapping and unit conversion</li>
+                  <li>Physical limits (160–300 V, monotonic kWh, clock drift)</li>
+                  <li>ML fault screening (advisory, synthetic-trained)</li>
+                </ul>
+              </div>
+            </div>
+
+            <div>
+              <p id="form-error" class="text-xs mb-2 hidden" role="alert" style="color:var(--vs-red)"></p>
+              <button id="btn-run-workbench" class="btn btn-primary w-full py-3" onclick="runWorkbenchExecution()">
+                <i data-lucide="play" class="w-4 h-4"></i>
+                <span>Run validation and transformation</span>
+              </button>
+              <p id="run-status" class="text-xs mt-2 hidden" role="status" aria-live="polite" style="color:var(--vs-body)"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="results-container" class="hidden space-y-6">
+        <div id="result-verdict" class="card card-pad" role="status" aria-live="polite">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p class="label">Result</p>
+              <h2 class="text-lg font-bold" id="verdict-title" style="color:var(--vs-ink)">—</h2>
+              <p class="text-sm body-text mt-1" id="verdict-reason"></p>
+              <p class="label mt-2" id="verdict-sample-note" hidden>Sample data: this run used a synthetic payload generated by the workbench.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button class="btn" onclick="focusDiagnostics()">Inspect diagnostics</button>
+              <button class="btn" onclick="runWorkbenchExecution()">Run again</button>
+              <a class="btn hidden" id="verdict-report-link" href="#" target="_blank" rel="noopener">Export report</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-pad">
+          <div class="flex flex-wrap items-start justify-between gap-4 pb-4" style="border-bottom:1px solid var(--vs-line)">
+            <div>
+              <div class="flex items-center gap-3">
+                <span id="res-grade-badge" class="pill pill-teal text-base">—</span>
+                <h2 class="text-lg font-bold" style="color:var(--vs-ink)">
+                  Interoperability score: <span id="res-total-score">0</span>%
+                </h2>
+              </div>
+              <p id="res-summary-text" class="text-xs body-text mt-1.5"></p>
+              <p class="label mt-1.5">
+                Score = syntactic 30% + semantic 40% + data integrity 30%, from rule checks only.
+                The ML screen is advisory and does not change it.
+              </p>
+            </div>
+            <div class="flex flex-wrap gap-5 text-xs">
+              <div>
+                <span class="label block">Run</span>
+                <span id="res-run-id" class="font-bold code" style="background:transparent;color:var(--vs-ink);border:0;padding:0">—</span>
+              </div>
+              <div>
+                <span class="label block">Duration</span>
+                <span id="res-duration" class="font-bold body-text">—</span>
+              </div>
+              <div>
+                <span class="label block">Data quality</span>
+                <span id="res-data-quality" class="font-bold body-text" title="Share of records that passed every rule check in the scorer.">—</span>
+              </div>
+              <div>
+                <span class="label block">Model version</span>
+                <span id="res-model-version" class="font-bold body-text" title="sha256 prefixes of the fault-classifier and anomaly-detector artifacts loaded for this run.">—</span>
+              </div>
+              <div class="flex items-end">
+                <a id="report-export-link" class="btn hidden" href="#" target="_blank" rel="noopener">
+                  <i data-lucide="download" class="w-3.5 h-3.5"></i><span>Export report</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 text-xs">
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="muted">Syntactic (30%)</span>
+                <span id="res-syntactic-score" class="font-bold" style="color:var(--vs-ink)">0%</span>
+              </div>
+              <div class="bar"><span id="res-syntactic-bar" style="width:0%"></span></div>
+            </div>
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="muted">Semantic (40%)</span>
+                <span id="res-semantic-score" class="font-bold" style="color:var(--vs-ink)">0%</span>
+              </div>
+              <div class="bar"><span id="res-semantic-bar" style="width:0%"></span></div>
+            </div>
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="muted">Data integrity (30%)</span>
+                <span id="res-integrity-score" class="font-bold" style="color:var(--vs-ink)">0%</span>
+              </div>
+              <div class="bar"><span id="res-integrity-bar" style="width:0%"></span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="card card-pad">
+            <h3 class="font-bold mb-1" style="color:var(--vs-ink)">Pipeline stages</h3>
+            <p class="label mb-3">Parse → syntactic → semantic mapping → physical sanity → ML screening.</p>
+            <div id="stages-body" class="space-y-2"></div>
+          </div>
+
+          <div class="card card-pad">
+            <div class="flex items-center justify-between mb-1">
+              <h3 class="font-bold" style="color:var(--vs-ink)">ML verdict</h3>
+              <span class="pill pill-amber" id="ml-verdict-badge">Trained on synthetic data</span>
+            </div>
+            <p class="label mb-3">Advisory screen. Rule findings below remain authoritative.</p>
+            <div id="ml-verdict-body" class="space-y-2 text-xs"></div>
+          </div>
+        </div>
+
+        <div class="card card-pad" id="diagnostics-card">
+          <h3 class="font-bold" style="color:var(--vs-ink)">
+            Diagnostics and remediation (<span id="res-issues-count">0</span>)
+          </h3>
+          <p class="label mt-1 mb-3" id="diagnostics-summary"></p>
+          <div id="res-issues-list" class="space-y-2"></div>
+          <button class="btn mt-3 hidden" id="diagnostics-toggle" onclick="toggleAllDiagnostics()" aria-expanded="false">Show all diagnostics</button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="card card-pad">
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-sm font-bold" style="color:var(--vs-ink)">Canonical payload (IEC 61968-9)</h4>
+              <button class="btn" onclick="copyCode('res-canonical-code')">Copy</button>
+            </div>
+            <pre id="res-canonical-code" class="code"></pre>
+          </div>
+          <div class="card card-pad">
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-sm font-bold" style="color:var(--vs-ink)">Target payload (<span id="res-target-vendor-name">none</span>)</h4>
+              <button class="btn" onclick="copyCode('res-target-code')">Copy</button>
+            </div>
+            <pre id="res-target-code" class="code"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MAPPING -->
+    <section id="view-mapping" class="tab-view hidden space-y-6" role="tabpanel" aria-labelledby="tab-btn-mapping">
+      <div class="card card-pad">
+        <h2 class="font-bold mb-1" style="color:var(--vs-ink)">Vendor mapping matrix</h2>
+        <p class="label">Documented adapter mapping from the canonical model to each supported vendor format — reference, not live output.</p>
+        <p class="notice mb-4" role="note">
+          Read-only. Mappings are defined in the adapter code (<code>backend/adapters/</code>); editing
+          them from this interface is not implemented, and nothing here saves changes.
+        </p>
+        <div class="overflow-x-auto">
+          <table class="vs">
+            <thead>
+              <tr>
+                <th>Canonical attribute</th><th>Standard / unit</th>
+                <th>Alpha HES (DLMS)</th><th>Beta HES (CSV)</th><th>Gamma MDMS (CIM)</th><th>Delta HES (legacy)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="font-bold" style="color:var(--vs-teal-deep)">active_energy_import_kwh</td><td>kWh cumulative</td><td>1.0.1.8.0.255 (scale −3)</td><td>KWH_IMP</td><td>ActiveEnergy.Import</td><td>act_wh × 0.001</td></tr>
+              <tr><td class="font-bold" style="color:var(--vs-teal-deep)">active_energy_export_kwh</td><td>kWh export</td><td>1.0.2.8.0.255 (scale −3)</td><td>KWH_EXP</td><td>ActiveEnergy.Export</td><td>exp_wh × 0.001</td></tr>
+              <tr><td class="font-bold" style="color:var(--vs-teal-deep)">voltage_v</td><td>V RMS L1</td><td>1.0.12.7.0.255 (scale −1)</td><td>VRMS</td><td>Voltage.RMS.V</td><td>volt_mv × 0.001</td></tr>
+              <tr><td class="font-bold" style="color:var(--vs-teal-deep)">current_a</td><td>A RMS</td><td>1.0.11.7.0.255 (scale −2)</td><td>IRMS</td><td>Current.RMS.A</td><td>curr_ma × 0.001</td></tr>
+              <tr><td class="font-bold" style="color:var(--vs-teal-deep)">power_factor</td><td>cos φ (−1…1)</td><td>1.0.13.7.0.255</td><td>PF</td><td>ReadingType.PF</td><td>p_fact_pct × 0.01</td></tr>
+              <tr><td class="font-bold" style="color:var(--vs-teal-deep)">timestamp</td><td>ISO 8601 UTC</td><td>clock (ISO UTC)</td><td>RDG_TIME (IST +5:30)</td><td>timeStamp</td><td>ts_epoch_sec</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card card-pad">
+        <h2 class="font-bold mb-1" style="color:var(--vs-ink)">Registered adapters</h2>
+        <p class="label mb-4">Direction support reported by the running adapter registry (<code>GET /api/vendors</code>).</p>
+        <div class="overflow-x-auto">
+          <table class="vs">
+            <thead><tr><th>Vendor</th><th>System</th><th>Format</th><th>Protocol</th><th>OBIS mappings</th><th>Event mappings</th></tr></thead>
+            <tbody id="mapping-matrix-body"><tr><td colspan="6" class="muted">Loading adapters…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMPARE -->
+    <section id="view-compare" class="tab-view hidden space-y-6" role="tabpanel" aria-labelledby="tab-btn-compare">
+      <div class="card card-pad">
+        <h2 class="font-bold mb-1" style="color:var(--vs-ink)">Run comparison</h2>
+        <p class="label mb-4">Compare a baseline run with a candidate run: resolved, persistent and newly introduced failures, plus score deltas.</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="label" for="compare-baseline">Baseline run</label>
+            <select id="compare-baseline" class="select mt-1"></select>
+          </div>
+          <div>
+            <label class="label" for="compare-candidate">Candidate run</label>
+            <select id="compare-candidate" class="select mt-1"></select>
+          </div>
+          <div class="flex items-end gap-2">
+            <button class="btn btn-primary" onclick="runComparison()">Compare runs</button>
+            <button class="btn" onclick="loadRunOptions()">Reload runs</button>
+          </div>
+        </div>
+        <div id="compare-body" class="mt-5 text-sm body-text"><p class="muted">Pick two runs to compare.</p></div>
+        <p class="label mt-3">
+          Score deltas are the difference between the two stored run scores. The lists below show which
+          stored rule diagnostics differ by code and field; a delta with no matching changed check came
+          from record counts or checks that are not stored per issue.
+        </p>
+      </div>
+
+      <div class="card card-pad">
+        <h2 class="font-bold mb-1" style="color:var(--vs-ink)">Contract diff</h2>
+        <p class="label mb-4">Rule diagnostics per run, side by side — the same payload contract checked by two runs.</p>
+        <div id="compare-contract-body" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <p class="muted">Select two runs above to see the side-by-side contract diff.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ROUNDTRIP -->
+    <section id="view-roundtrip" class="tab-view hidden space-y-6" role="tabpanel" aria-labelledby="tab-btn-roundtrip">
+      <div class="card card-pad">
+        <h2 class="font-bold mb-1" style="color:var(--vs-ink)">Round-trip transformation</h2>
+        <p class="label mb-4">A → canonical → B → canonical, with a field-level diff of what survived the round trip.</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="label" for="rt-vendor-a">Vendor A (source)</label>
+            <select id="rt-vendor-a" class="select mt-1">
+              <option value="alpha-hes">Alpha HES</option>
+              <option value="beta-hes">Beta HES</option>
+              <option value="gamma-mdms">Gamma MDMS</option>
+              <option value="delta-legacy">Delta HES</option>
+            </select>
+          </div>
+          <div>
+            <label class="label" for="rt-vendor-b">Vendor B (target)</label>
+            <select id="rt-vendor-b" class="select mt-1">
+              <option value="delta-legacy">Delta HES</option>
+              <option value="alpha-hes">Alpha HES</option>
+              <option value="beta-hes">Beta HES</option>
+              <option value="gamma-mdms">Gamma MDMS</option>
+            </select>
+          </div>
+          <div class="flex items-end gap-2">
+            <button class="btn btn-primary" onclick="runRoundtrip()">Run round trip</button>
+            <button class="btn" onclick="loadRoundtripSample()">Load sample</button>
+          </div>
+        </div>
+        <div class="mt-4">
+          <label class="label" for="rt-payload">Vendor A payload</label>
+          <textarea id="rt-payload" rows="10" class="code mt-1" placeholder="Load a sample payload for vendor A, or paste one."></textarea>
+        </div>
+        <div id="rt-body" class="mt-5 text-sm body-text"><p class="muted">Run a round trip to see the field-level diff.</p></div>
+      </div>
+    </section>
+
+    <!-- SUITES -->
+    <section id="view-suites" class="tab-view hidden space-y-6" role="tabpanel" aria-labelledby="tab-btn-suites">
+      <div class="card card-pad">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="font-bold" style="color:var(--vs-ink)">Test suites</h2>
+            <p class="label">Saved scenario batches. Running a suite reuses the workbench execution path.</p>
+          </div>
+          <button class="btn" onclick="loadSuites()">Reload</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="vs">
+            <thead><tr><th>Suite</th><th>Scenarios</th><th>Created</th><th>Action</th></tr></thead>
+            <tbody id="suites-body"><tr><td colspan="4" class="muted">Loading suites…</td></tr></tbody>
+          </table>
+        </div>
+        <div id="suite-run-result" class="mt-4 text-sm body-text"></div>
+      </div>
+    </section>
+
+    <!-- VENDORS -->
+    <section id="view-vendors" class="tab-view hidden space-y-6" role="tabpanel" aria-labelledby="tab-btn-vendors">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="vendor-cards-grid"></div>
+    </section>
+
+    <!-- HISTORY -->
+    <section id="view-history" class="tab-view hidden space-y-6" role="tabpanel" aria-labelledby="tab-btn-history">
+      <div class="card card-pad">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-bold" style="color:var(--vs-ink)">Run history</h2>
+          <button class="btn" onclick="loadHistoryRuns()">Reload</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="vs">
+            <thead>
+              <tr><th>Run</th><th>Executed</th><th>Source</th><th>Target</th><th>Valid / total</th><th>Score</th><th>Grade</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="history-runs-body"><tr><td colspan="8" class="muted">Loading runs…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- STANDARDS -->
+    <section id="view-standards" class="tab-view hidden space-y-6" role="tabpanel" aria-labelledby="tab-btn-standards">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="card card-pad space-y-3">
+          <h2 class="font-bold" style="color:var(--vs-ink)">IS 15959 companion specification</h2>
+          <p class="text-xs body-text leading-relaxed">
+            Mandated for Indian smart meter rollouts under RDSS: data model, object definitions and load-survey capture periods (15/30 min).
+          </p>
+          <ul class="text-xs muted space-y-1 list-disc pl-4">
+            <li><strong>Part 1:</strong> AC static direct connected meters</li>
+            <li><strong>Part 2:</strong> transformer-operated static meters</li>
+            <li><strong>Part 3:</strong> HV boundary and feeder metering</li>
+          </ul>
+        </div>
+        <div class="card card-pad space-y-3">
+          <h2 class="font-bold" style="color:var(--vs-ink)">IEC 61968-9 (CIM for distribution)</h2>
+          <p class="text-xs body-text leading-relaxed">
+            Vendor-neutral back-office message schemas: meter measurements become <code>MeterReadings</code>, grid alarms become <code>EndDeviceEvents</code>.
+          </p>
+          <ul class="text-xs muted space-y-1 list-disc pl-4">
+            <li><strong>ReadingQuality:</strong> valid, missing, estimated, suspect</li>
+            <li><strong>EndDeviceEvent:</strong> tamper, power quality, outage codes</li>
+            <li><strong>IntervalBlocks:</strong> time-series telemetry payloads</li>
+          </ul>
+        </div>
+      </div>
+      <div class="notice">
+        The workbench validates and normalizes payloads in software. It does not emulate RF mesh, cellular or optical probe protocols, and it does not certify formal conformance.
+      </div>
+    </section>
+  </main>
+
+  <footer class="w-full max-w-7xl mx-auto px-4 py-5 text-xs flex flex-wrap items-center justify-between gap-2" style="color:var(--vs-muted);border-top:1px solid var(--vs-line)">
+    <span>VidyutSetu · engineering workbench for AMI interoperability</span>
+    <span><a class="link" href="/">Landing page</a> · <a class="link" href="/docs">API docs</a></span>
+  </footer>
+
+  <div id="detail-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" style="background:rgba(11,37,69,.65)">
+    <div class="card w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="px-5 py-3 flex justify-between items-center" style="border-bottom:1px solid var(--vs-line)">
+        <h3 id="modal-title" class="font-bold text-sm" style="color:var(--vs-ink)">Run detail</h3>
+        <button class="btn" onclick="closeModal()" aria-label="Close run detail">Close</button>
+      </div>
+      <div id="modal-content" class="p-5 overflow-y-auto space-y-4 text-xs"></div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
