@@ -19,7 +19,17 @@ class ScoringEngine:
         format_parsed_successfully: bool = True
     ) -> CompatibilityScoreBreakdown:
         if total_records == 0:
-            total_records = 1
+            return CompatibilityScoreBreakdown(
+                syntactic_score=0.0,
+                semantic_score=0.0,
+                data_integrity_score=0.0,
+                total_score=0.0,
+                grade="INCOMPLETE",
+                summary=(
+                    "Incomplete assessment: no canonical meter readings were available "
+                    "for interoperability scoring."
+                ),
+            )
 
         error_count = sum(1 for i in issues if i.severity == IssueSeverity.ERROR)
         warning_count = sum(1 for i in issues if i.severity == IssueSeverity.WARNING)

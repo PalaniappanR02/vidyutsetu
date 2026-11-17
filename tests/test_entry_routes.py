@@ -37,6 +37,28 @@ def test_dashboard_and_preview_routes_serve_html(client):
     assert "text/html" in preview.headers["content-type"]
 
 
+def test_each_workbench_tab_has_a_page_level_heading(client):
+    body = client.get("/dashboard").text
+    expected_titles = {
+        "overview": "Workspace overview",
+        "workbench": "Validation workbench",
+        "mapping": "Vendor mapping",
+        "compare": "Compare validation runs",
+        "roundtrip": "Transformation inspector",
+        "suites": "Test suites",
+        "vendors": "Vendor adapters",
+        "history": "Run history",
+        "standards": "Standards reference",
+    }
+
+    for tab_id, title in expected_titles.items():
+        section_start = body.index(f'<section id="view-{tab_id}"')
+        heading_start = body.index('<div class="page-heading">', section_start)
+        section_end = body.index("</section>", section_start)
+        assert heading_start < section_end
+        assert f"<h1>{title}</h1>" in body[heading_start:section_end]
+
+
 def test_unknown_path_negotiates_html_for_browsers(client):
     browser = client.get("/does-not-exist", headers={"accept": "text/html"})
     assert browser.status_code == 404

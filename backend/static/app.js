@@ -61,6 +61,77 @@ function pct(value) {
   return value === null || value === undefined ? '—' : Number(value).toFixed(1) + '%';
 }
 
+/* ---------- display-only formatting helpers (no data is changed) ---------- */
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "17 Nov 2026, 1:48 PM". Stored and API values keep their original format. */
+function fmtDate(value) {
+  if (!value) return '—';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  const hours = d.getHours();
+  const h12 = hours % 12 === 0 ? 12 : hours % 12;
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}, ${h12}:${minutes} ${hours < 12 ? 'AM' : 'PM'}`;
+}
+
+/** Grade badges stay text-identical; only the filled pill colour changes. */
+function gradeClass(grade) {
+  const g = String(grade === null || grade === undefined ? '' : grade).toUpperCase();
+  if (g === 'A+') return 'grade grade-a-plus';
+  if (g === 'A') return 'grade grade-a';
+  if (g === 'B') return 'grade grade-b';
+  return 'grade grade-c';
+}
+
+function scoreClass(score) {
+  const s = Number(score);
+  if (s >= 95) return 'score-good';
+  if (s >= 80) return 'score-mid';
+  return 'score-bad';
+}
+
+/** Score cell: value plus a small progress bar, colour driven by the same thresholds. */
+function scoreCell(score) {
+  const s = Number(score);
+  const width = Math.max(0, Math.min(100, Number.isFinite(s) ? s : 0));
+  return `<div class="score-cell ${scoreClass(score)}">
+      <span class="score-val">${esc(score)}%</span>
+      <span class="score-bar" aria-hidden="true"><span style="width:${width}%"></span></span>
+    </div>`;
+}
+
+function emptyRow(colspan, icon, message) {
+  return `<tr><td colspan="${colspan}">
+      <div class="empty-state">
+        <i data-lucide="${icon}" class="w-4 h-4" aria-hidden="true"></i>
+        <span>${message}</span>
+      </div>
+    </td></tr>`;
+}
+
+function vendorInitials(name) {
+  return String(name || '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(word => word[0].toUpperCase())
+    .join('');
+}
+
+/** Whole vendor card is a click target, but inner buttons keep their own handler. */
+function openVendorCard(event, vendorId) {
+  if (event && event.target && event.target.closest('button, a')) return;
+  runQuickDemo(vendorId, 'gamma-mdms');
+}
+
+function handleVendorCardKey(event, vendorId) {
+  if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
+  event.preventDefault();
+  runQuickDemo(vendorId, 'gamma-mdms');
+}
+
 /* ---------- theme ---------- */
 
 function applyStoredTheme() {
@@ -123,17 +194,23 @@ function renderVendorCards() {
     return;
   }
   container.innerHTML = vendors.map(v => `
-    <div class="card card-pad space-y-3">
+    <div class="card card-pad space-y-3 vendor-card" role="button" tabindex="0"
+         aria-label="Test ${esc(v.name)} in the workbench"
+         onclick="openVendorCard(event, '${esc(v.vendor_id)}')"
+         onkeydown="handleVendorCardKey(event, '${esc(v.vendor_id)}')">
       <div class="flex items-start justify-between gap-2">
-        <div>
-          <span class="pill pill-teal">${esc(v.system_type)}</span>
-          <h3 class="font-bold mt-1" style="color:var(--vs-ink)">${esc(v.name)}</h3>
-          <p class="label code" style="border:0;background:transparent;padding:0;color:var(--vs-muted)">${esc(v.vendor_id)} · v${esc(v.version)}</p>
+        <div class="flex items-start gap-3">
+          <span class="vendor-avatar" aria-hidden="true">${esc(vendorInitials(v.name))}</span>
+          <div>
+            <span class="pill pill-teal">${esc(v.system_type)}</span>
+            <h3 class="font-bold mt-1" style="color:var(--vs-ink)">${esc(v.name)}</h3>
+            <p class="label code" style="border:0;background:transparent;padding:0;color:var(--vs-muted)">${esc(v.vendor_id)} · v${esc(v.version)}</p>
+          </div>
         </div>
         <span class="pill">${esc(v.format_type)}</span>
       </div>
       <p class="text-xs body-text leading-relaxed">${esc(v.description)}</p>
-      <div class="pt-2 flex items-center justify-between text-xs" style="border-top:1px solid var(--vs-line)">
+      <div class="pt-2 flex items-center justify-between gap-2 text-xs" style="border-top:1px solid var(--vs-line)">
         <span class="muted">Protocol: <strong style="color:var(--vs-ink)">${esc(v.protocol)}</strong></span>
         <button class="btn" onclick="runQuickDemo('${esc(v.vendor_id)}', 'gamma-mdms')">Test in workbench</button>
       </div>
@@ -173,9 +250,12 @@ async function refreshDashboard() {
     const totalRuns = data.total_test_runs || 0;
     const avgScore = data.average_interoperability_score || 0;
 
+    const usedAdapters = Object.keys(data.vendor_usage || {}).length;
+    const totalAdapters = (data.active_vendor_adapters || 0) || usedAdapters;
+
     document.getElementById('stat-total-runs').innerText = totalRuns;
     document.getElementById('stat-total-runs-hint').innerText = totalRuns
-      ? `${Object.keys(data.vendor_usage || {}).length} adapter(s) used so far.`
+      ? `${usedAdapters} of ${totalAdapters} adapters used`
       : 'No runs recorded yet — start one in Workbench.';
 
     document.getElementById('stat-avg-score').innerText = totalRuns ? avgScore.toFixed(1) + '%' : '0%';
@@ -188,21 +268,23 @@ async function refreshDashboard() {
     const tbody = document.getElementById('recent-runs-table-body');
     const runs = data.recent_runs || [];
     if (!runs.length) {
-      tbody.innerHTML = `<tr><td colspan="8" class="muted">No runs yet. Open Workbench to execute the first validation.</td></tr>`;
+      tbody.innerHTML = emptyRow(8, 'inbox', 'No runs yet. Open Workbench to execute the first validation.');
+      if (window.lucide) lucide.createIcons();
       return;
     }
     tbody.innerHTML = runs.map(r => `
       <tr>
         <td class="code" style="background:transparent;border:0;padding:0 .6rem;color:var(--vs-teal-deep)">${esc(r.run_id)}</td>
-        <td>${esc(new Date(r.execution_time).toLocaleString())}</td>
+        <td>${esc(fmtDate(r.execution_time))}</td>
         <td>${esc(r.source_vendor)}</td>
         <td>${esc(r.target_vendor || 'none')}</td>
         <td>${esc(r.total_records)}</td>
-        <td><strong style="color:var(--vs-ink)">${esc(r.total_score)}%</strong></td>
-        <td><span class="${r.total_score >= 85 ? 'pill pill-teal' : 'pill pill-amber'}">${esc(r.grade)}</span></td>
+        <td>${scoreCell(r.total_score)}</td>
+        <td><span class="${gradeClass(r.grade)}">${esc(r.grade)}</span></td>
         <td><a class="link" href="/api/test-runs/${encodeURIComponent(r.run_id)}/report.html" target="_blank" rel="noopener">Report</a></td>
       </tr>
     `).join('');
+    if (window.lucide) lucide.createIcons();
   } catch (e) {
     console.error('Failed to refresh overview', e);
     const tbody = document.getElementById('recent-runs-table-body');
@@ -234,8 +316,9 @@ async function renderHeatmap() {
   try {
     const runs = await (await fetch('/api/test-runs?limit=200')).json();
     if (!runs.length) {
-      container.innerHTML = '<p class="muted text-sm">No stored runs yet, so there is nothing to plot.</p>';
+      container.innerHTML = `<div class="empty-state"><i data-lucide="bar-chart-3" class="w-4 h-4" aria-hidden="true"></i><span>No stored runs yet, so there is nothing to plot.</span></div>`;
       caption.innerText = '';
+      if (window.lucide) lucide.createIcons();
       return;
     }
     const vendors = [...new Set(runs.map(r => r.source_vendor))].sort();
@@ -247,7 +330,7 @@ async function renderHeatmap() {
     });
     const max = Math.max(1, ...vendors.flatMap(v => counts[v]));
 
-    const header = `<tr><th>Vendor</th>${SCORE_BANDS.map(b => `<th class="band">${b.label}</th>`).join('')}</tr>`;
+    const header = `<tr><th class="heat-axis">Vendor ↓ · band % →</th>${SCORE_BANDS.map(b => `<th class="band">${b.label}</th>`).join('')}</tr>`;
     const rows = vendors.map(v => `<tr>
       <th>${esc(v)}</th>
       ${counts[v].map((n, i) => {
@@ -259,8 +342,14 @@ async function renderHeatmap() {
       }).join('')}
     </tr>`).join('');
 
-    container.innerHTML = `<table class="heat"><thead>${header}</thead><tbody>${rows}</tbody></table>`;
-    caption.innerText = `Score distribution of ${runs.length} stored run(s). Cell intensity is the run count per band.`;
+    container.innerHTML = `<table class="heat" aria-label="Stored runs per source vendor and score band">
+        <thead>${header}</thead><tbody>${rows}</tbody></table>
+      <div class="legend">
+        <span class="swatch" style="background:var(--vs-surface-alt)"></span><span>0 runs</span>
+        <span class="swatch" style="background:rgba(14,154,167,0.35)"></span><span>fewer</span>
+        <span class="swatch" style="background:rgba(14,154,167,0.9)"></span><span>more</span>
+      </div>`;
+    caption.innerText = `${runs.length} stored run(s). Rows are the source vendor, columns the interoperability score band; every cell shows its run count.`;
   } catch (e) {
     container.innerHTML = '<p class="muted text-sm">Could not load runs.</p>';
     console.error('Heatmap failed', e);
@@ -529,8 +618,7 @@ function displayExecutionResults(res) {
 
   const badge = document.getElementById('res-grade-badge');
   badge.innerText = res.score.grade;
-  badge.className = res.score.total_score >= 85 ? 'pill pill-teal text-base'
-    : res.score.total_score >= 70 ? 'pill pill-amber text-base' : 'pill pill-red text-base';
+  badge.className = `text-base ${gradeClass(res.score.grade)}`;
 
   document.getElementById('res-syntactic-score').innerText = res.score.syntactic_score + '%';
   document.getElementById('res-syntactic-bar').style.width = res.score.syntactic_score + '%';
@@ -686,7 +774,11 @@ function renderVerdict(res) {
   if (!title) return;
 
   let label;
-  if (errors.length) {
+  if (res.conformance_outcome === 'INCOMPLETE') {
+    label = 'Incomplete assessment';
+    card.style.borderLeft = '4px solid var(--vs-amber)';
+    title.style.color = 'var(--vs-amber-ink)';
+  } else if (errors.length) {
     label = 'Failed validation';
     card.style.borderLeft = '4px solid var(--vs-red)';
     title.style.color = 'var(--vs-red)';
@@ -709,7 +801,9 @@ function renderVerdict(res) {
   const lead = first
     ? ` First: [${first.severity}] ${first.code}${first.field ? ' on ' + first.field : ''} — ${first.explanation || first.message}`
     : '';
-  const advice = errors.length
+  const advice = res.conformance_outcome === 'INCOMPLETE'
+    ? ' Provide at least one valid meter reading, then run again.'
+    : errors.length
     ? ' Fix the error(s) below and run again.'
     : (warnings.length || mlFlags.length)
       ? ' Check the renamed or flagged fields below; the payload is usable if those are expected.'
@@ -929,14 +1023,15 @@ async function loadSuites() {
   try {
     const suites = await (await fetch('/api/suites')).json();
     if (!suites.length) {
-      body.innerHTML = '<tr><td colspan="4" class="muted">No suites saved yet. Create one with POST /api/suites (see /docs).</td></tr>';
+      body.innerHTML = emptyRow(4, 'layers', 'No suites saved yet. Create one with POST /api/suites (see /docs).');
+      if (window.lucide) lucide.createIcons();
       return;
     }
     body.innerHTML = suites.map(suite => `
       <tr>
         <td><strong style="color:var(--vs-ink)">${esc(suite.name)}</strong><div class="label">id ${esc(suite.id)}</div></td>
         <td>${(suite.scenarios || []).length}</td>
-        <td>${esc(suite.created_at ? new Date(suite.created_at).toLocaleString() : '—')}</td>
+        <td>${esc(fmtDate(suite.created_at))}</td>
         <td><button class="btn" onclick="runSuite(${Number(suite.id)})">Run suite</button></td>
       </tr>
     `).join('');
@@ -980,18 +1075,19 @@ async function loadHistoryRuns() {
   try {
     const runs = await (await fetch('/api/test-runs')).json();
     if (!runs.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="muted">No historical runs recorded yet.</td></tr>';
+      tbody.innerHTML = emptyRow(8, 'history', 'No historical runs recorded yet.');
+      if (window.lucide) lucide.createIcons();
       return;
     }
     tbody.innerHTML = runs.map(r => `
       <tr>
         <td class="code" style="background:transparent;border:0;padding:0 .6rem;color:var(--vs-teal-deep)">${esc(r.run_id)}</td>
-        <td>${esc(new Date(r.execution_time).toLocaleString())}</td>
+        <td>${esc(fmtDate(r.execution_time))}</td>
         <td>${esc(r.source_vendor)}</td>
         <td>${esc(r.target_vendor || 'none')}</td>
         <td>${esc(r.valid_records)} / ${esc(r.total_records)}</td>
-        <td><strong style="color:var(--vs-ink)">${esc(r.total_score)}%</strong></td>
-        <td><span class="${r.total_score >= 85 ? 'pill pill-teal' : 'pill pill-amber'}">${esc(r.grade)}</span></td>
+        <td>${scoreCell(r.total_score)}</td>
+        <td><span class="${gradeClass(r.grade)}">${esc(r.grade)}</span></td>
         <td class="flex flex-wrap gap-2">
           <button class="btn" onclick="viewRunDetail('${esc(r.run_id)}')">Detail</button>
           <a class="btn" href="/api/test-runs/${encodeURIComponent(r.run_id)}/report.html" target="_blank" rel="noopener">Report</a>
