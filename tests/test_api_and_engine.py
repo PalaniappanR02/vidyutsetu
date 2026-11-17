@@ -65,8 +65,8 @@ def test_service_health_reports_database_error(client, monkeypatch):
     monkeypatch.setattr(main, "engine", UnavailableEngine())
 
     health = client.get("/health")
-    assert health.status_code == 200
-    assert health.json() == {"status": "ok", "version": "0.1.0", "db": "error"}
+    assert health.status_code == 503
+    assert health.json() == {"status": "error", "version": main.app.version, "db": "error"}
 
 
 def test_openapi_routes_use_category_tags(client):

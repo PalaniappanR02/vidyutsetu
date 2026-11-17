@@ -178,10 +178,18 @@ async def not_found(request: Request, exc):
 
 @app.get("/health")
 def health_check():
+    """Report service and database health with an HTTP failure when the DB is down."""
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
         db_status = "ok"
     except SQLAlchemyError:
         db_status = "error"
-    return {"status": "ok", "version": "0.1.0", "db": db_status}
+    return JSONResponse(
+        {
+            "status": "ok" if db_status == "ok" else "error",
+            "version": app.version,
+            "db": db_status,
+        },
+        status_code=200 if db_status == "ok" else 503,
+    )
