@@ -9,20 +9,20 @@
   <link rel="apple-touch-icon" href="/static/apple-icon.png">
   <style>
     :root {
-      --navy: #0B2545;
-      --teal: #0E9AA7;
-      --teal-deep: #0B7C87;
-      --teal-tint: #E3F4F6;
-      --cyan: #19C2D0;
-      --amber: #F59E0B;
-      --amber-tint: #FFF4E0;
-      --amber-ink: #8A5A00;
-      --bg: #F4F8FB;
-      --surface: #FFFFFF;
-      --line: #D6E3EE;
-      --ink: #13263B;
-      --body: #33506B;
-      --muted: #5B7288;
+      --navy: #173D30;
+      --teal: #4F8061;
+      --teal-deep: #245B42;
+      --teal-tint: #E5EFE6;
+      --cyan: #91B79A;
+      --amber: #AD583E;
+      --amber-tint: #F6E9E2;
+      --amber-ink: #824632;
+      --bg: #F4F2E9;
+      --surface: #FFFEFA;
+      --line: #D9DED3;
+      --ink: #1B3028;
+      --body: #42594D;
+      --muted: #65766C;
     }
     * { box-sizing: border-box; }
     html { background: var(--bg); }
@@ -184,6 +184,30 @@
 
     @media (prefers-reduced-motion: reduce) {
       * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+
+    body { font-size: 16px; }
+    .bar { padding-top: .9rem; padding-bottom: .9rem; }
+    .brand-text { font-size: 1.2rem; }
+    nav.main { gap: .5rem; }
+    nav.main a { font-size: .9rem; padding: .5rem .75rem; }
+    main { max-width: 1180px; padding-top: 2.2rem; }
+    h1 { max-width: 19ch; font-size: clamp(2.4rem, 4.2vw, 3.35rem); letter-spacing: -.04em; }
+    h2 { font-size: 1.45rem; letter-spacing: -.025em; }
+    h3 { font-size: 1.05rem; }
+    p { line-height: 1.65; }
+    .hero { padding: 1.2rem 0 2rem; }
+    .lede { font-size: 1.08rem; }
+    section { margin-top: 3rem; }
+    .card { padding: 1.35rem 1.45rem; border-radius: 12px; }
+    .btn { border-radius: 7px; padding: .72rem 1.05rem; }
+    .btn-cta { background: var(--amber); border-color: var(--amber); color: #fff; }
+    .btn-cta:hover { background: #934732; }
+
+    @media (max-width: 700px) {
+      main { padding-top: 1.4rem; }
+      h1 { font-size: clamp(2rem, 8vw, 2.65rem); }
+      section { margin-top: 2.2rem; }
     }
   </style>
 </head>
