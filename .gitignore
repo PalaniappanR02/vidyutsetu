@@ -13,3 +13,7 @@ node_modules/
 !.env.example
 .coverage
 htmlcov/
+
+.freebuff/
+.kiro/
+KIRO_MASTER_PROMPT.md
