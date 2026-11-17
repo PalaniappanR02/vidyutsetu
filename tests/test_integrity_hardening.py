@@ -4,6 +4,7 @@ from datetime import timezone
 
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from backend.adapters import get_adapter
 from backend.api import routes
@@ -79,6 +80,23 @@ def test_cors_does_not_combine_wildcard_origins_with_credentials():
 def test_upload_payload_rejects_content_larger_than_the_limit():
     with pytest.raises(HTTPException, match="Upload exceeds"):
         routes._ensure_payload_size(b"x" * (routes.MAX_UPLOAD_BYTES + 1))
+
+
+def test_upload_requires_supported_extension_and_utf8():
+    with TestClient(app) as client:
+        unsupported = client.post(
+            "/api/workbench/execute",
+            data={"source_vendor": "alpha-hes"},
+            files={"file": ("payload.exe", b"{}", "application/octet-stream")},
+        )
+        assert unsupported.status_code == 415
+
+        invalid_utf8 = client.post(
+            "/api/workbench/execute",
+            data={"source_vendor": "alpha-hes"},
+            files={"file": ("payload.json", b"\xff", "application/json")},
+        )
+        assert invalid_utf8.status_code == 400
 
 
 def test_empty_dataset_is_incomplete_and_never_receives_a_compatibility_score():

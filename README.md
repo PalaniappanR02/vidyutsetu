@@ -37,24 +37,34 @@
 ```bash
 git clone https://github.com/PalaniappanR02/vidyutsetu.git
 cd vidyutsetu
+python -m venv .venv
+# Activate .venv for your shell, then:
 pip install -r requirements.txt
+npm ci
 ```
 
 ### 2. Run the Workbench
 ```bash
-# Using uvicorn directly
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
-
-# Or using the run script
-chmod +x run.sh
-./run.sh
+uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
-Navigate to `http://localhost:8000` in your browser.
+On first startup in demo mode, a one-time administrator password is printed to the
+server console if no initial password is configured. Sign in with that password;
+do not expose demo mode to an untrusted network. For password mode, set
+`VIDYUTSETU_AUTH_MODE=password` and `VIDYUTSETU_INITIAL_ADMIN_PASSWORD` before
+first startup. See [SECURITY_AND_ACCESS](docs/SECURITY_AND_ACCESS.md) for role
+permissions and deployment constraints.
+
+All generated and model training data is **SYNTHETIC**. Model predictions are
+screening aids and do not determine conformance; deterministic validation rules
+remain authoritative.
 
 ### 3. Run Automated Tests
 ```bash
-pytest
+python -m pytest -q
+npm test
 ```
+The browser test requires Playwright's Chromium browser. Frontend assets are
+built locally by `npm test`; run `npm run build:frontend` when editing the UI.
 
 ---
 
@@ -108,6 +118,8 @@ The `samples/` directory provides realistic datasets for hands-on workbench test
 - [User Guide](USER_GUIDE.md)
 - [Deployment Guide](DEPLOYMENT.md)
 - [Known Limitations](KNOWN_LIMITATIONS.md)
+- [Security and Access](docs/SECURITY_AND_ACCESS.md)
+- [ML Engineering](docs/ML_ENGINEERING.md)
 
 ---
 

@@ -1,13 +1,14 @@
 """REST API Routes for VidyutSetu Workbench."""
 
 import json
+import logging
 import time
 import uuid
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -19,11 +20,13 @@ from backend.db.database import (
     DBTestSuite,
     DBSuiteRun,
 )
+from backend.security.auth import require_roles
 from backend.adapters.registry import get_adapter, list_registered_vendors
 from backend.engine.validator import ValidationEngine
 from backend.engine.scorer import ScoringEngine, DiagnosticSuggester
 from backend.engine.report_builder import build_run_report
 from backend.generator.simulator import SyntheticAmiGenerator
+from backend.config import settings
 from backend.models.canonical import (
     CanonicalPayload,
     DiagnosticIssue,
@@ -39,6 +42,7 @@ from app.ml.inference import (
 )
 
 router = APIRouter()
+LOGGER = logging.getLogger("vidyutsetu.api")
 workbench_router = APIRouter(prefix="/api", tags=["workbench"])
 compare_router = APIRouter(prefix="/api", tags=["compare"])
 roundtrip_router = APIRouter(prefix="/api", tags=["roundtrip"])
@@ -50,7 +54,7 @@ PARSE_DIAGNOSTIC_CODES = {
     "UNSUPPORTED_DATA_TYPE",
     "INVALID_CSV_INPUT",
 }
-MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+MAX_UPLOAD_BYTES = settings.max_request_bytes
 SEMANTIC_DIAGNOSTIC_CODES = {
     "MISSING_ACTIVE_IMPORT_ENERGY",
     "MISSING_ACT_WH",
@@ -90,8 +94,8 @@ class RoundTripInput(BaseModel):
 
 
 class SuiteCreateInput(BaseModel):
-    name: str
-    scenarios: List[Dict[str, Any]]
+    name: str = Field(..., min_length=1, max_length=128)
+    scenarios: List[Dict[str, Any]] = Field(..., max_length=100)
 
 
 def _stage(
@@ -331,7 +335,9 @@ def health_check():
     }
 
 
-@workbench_router.get("/stats")
+@workbench_router.get(
+    "/stats", dependencies=[Depends(require_roles("admin", "operator", "viewer"))]
+)
 def get_workbench_stats(db: Session = Depends(get_db)):
     total_runs = db.query(DBTestRun).count()
     runs = db.query(DBTestRun).order_by(desc(DBTestRun.execution_time)).limit(100).all()
@@ -364,7 +370,9 @@ def get_workbench_stats(db: Session = Depends(get_db)):
     }
 
 
-@workbench_router.get("/vendors")
+@workbench_router.get(
+    "/vendors", dependencies=[Depends(require_roles("admin", "operator", "viewer"))]
+)
 def get_vendors(db: Session = Depends(get_db)):
     registered = list_registered_vendors()
     # Check if there are database overrides
@@ -381,7 +389,9 @@ def get_vendors(db: Session = Depends(get_db)):
     return out
 
 
-@workbench_router.post("/generate")
+@workbench_router.post(
+    "/generate", dependencies=[Depends(require_roles("admin", "operator", write=True))]
+)
 def generate_synthetic_data(
     vendor_id: str = Query(..., description="Target vendor format: alpha-hes, beta-hes, gamma-mdms, delta-legacy, or canonical"),
     meter_count: int = Query(3, ge=1, le=20),
@@ -427,12 +437,33 @@ def _ensure_payload_size(content_bytes: bytes) -> None:
 
 async def _read_upload_payload(file: UploadFile) -> str:
     """Read at most the supported text payload size before decoding it."""
+    filename = (file.filename or "").lower()
+    suffix = filename.rsplit(".", 1)[-1] if "." in filename else ""
+    if suffix not in {"json", "csv"}:
+        raise HTTPException(status_code=415, detail="Only JSON and CSV payload files are supported.")
+    content_type = (file.content_type or "").split(";", 1)[0].strip().lower()
+    if content_type not in {
+        "",
+        "application/json",
+        "text/json",
+        "text/csv",
+        "application/csv",
+        "text/plain",
+        "application/octet-stream",
+    }:
+        raise HTTPException(status_code=415, detail="Uploaded file content type is not supported.")
     content_bytes = await file.read(MAX_UPLOAD_BYTES + 1)
     _ensure_payload_size(content_bytes)
-    return content_bytes.decode("utf-8", errors="replace")
+    try:
+        return content_bytes.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise HTTPException(status_code=400, detail="Payload file must be UTF-8 encoded.") from error
 
 
-@workbench_router.post("/workbench/execute")
+@workbench_router.post(
+    "/workbench/execute",
+    dependencies=[Depends(require_roles("admin", "operator", write=True))],
+)
 async def execute_interoperability_test(
     source_vendor: str = Form(...),
     target_vendor: Optional[str] = Form(None),
@@ -451,7 +482,9 @@ async def execute_interoperability_test(
     return _execute_workbench_payload(source_vendor, target_vendor, content_str, db)
 
 
-@compare_router.post("/compare")
+@compare_router.post(
+    "/compare", dependencies=[Depends(require_roles("admin", "operator", write=True))]
+)
 def compare_test_runs(request: CompareRunsInput, db: Session = Depends(get_db)):
     baseline = (
         db.query(DBTestRun).filter(DBTestRun.run_id == request.baseline_run_id).first()
@@ -511,7 +544,9 @@ def compare_test_runs(request: CompareRunsInput, db: Session = Depends(get_db)):
     }
 
 
-@roundtrip_router.post("/roundtrip")
+@roundtrip_router.post(
+    "/roundtrip", dependencies=[Depends(require_roles("admin", "operator", write=True))]
+)
 def roundtrip_payload(request: RoundTripInput):
     try:
         _ensure_payload_size(json.dumps(request.payload, default=str).encode("utf-8"))
@@ -577,7 +612,9 @@ def roundtrip_payload(request: RoundTripInput):
     }
 
 
-@suites_router.post("/suites")
+@suites_router.post(
+    "/suites", dependencies=[Depends(require_roles("admin", "operator", write=True))]
+)
 def create_test_suite(request: SuiteCreateInput, db: Session = Depends(get_db)):
     if not request.name.strip():
         raise HTTPException(status_code=422, detail="Suite name must not be empty.")
@@ -596,7 +633,9 @@ def create_test_suite(request: SuiteCreateInput, db: Session = Depends(get_db)):
     }
 
 
-@suites_router.get("/suites")
+@suites_router.get(
+    "/suites", dependencies=[Depends(require_roles("admin", "operator", "viewer"))]
+)
 def list_test_suites(db: Session = Depends(get_db)):
     suites = db.query(DBTestSuite).order_by(DBTestSuite.id.desc()).all()
     return [
@@ -610,7 +649,10 @@ def list_test_suites(db: Session = Depends(get_db)):
     ]
 
 
-@suites_router.post("/suites/{suite_id}/run")
+@suites_router.post(
+    "/suites/{suite_id}/run",
+    dependencies=[Depends(require_roles("admin", "operator", write=True))],
+)
 def run_test_suite(suite_id: int, db: Session = Depends(get_db)):
     suite = db.query(DBTestSuite).filter(DBTestSuite.id == suite_id).first()
     if not suite:
@@ -675,7 +717,9 @@ def run_test_suite(suite_id: int, db: Session = Depends(get_db)):
     }
 
 
-@workbench_router.get("/test-runs")
+@workbench_router.get(
+    "/test-runs", dependencies=[Depends(require_roles("admin", "operator", "viewer"))]
+)
 def list_test_runs(limit: int = 50, db: Session = Depends(get_db)):
     runs = db.query(DBTestRun).order_by(desc(DBTestRun.execution_time)).limit(limit).all()
     return [
@@ -698,7 +742,10 @@ def list_test_runs(limit: int = 50, db: Session = Depends(get_db)):
     ]
 
 
-@workbench_router.get("/test-runs/{run_id}")
+@workbench_router.get(
+    "/test-runs/{run_id}",
+    dependencies=[Depends(require_roles("admin", "operator", "viewer"))],
+)
 def get_test_run_detail(run_id: str, db: Session = Depends(get_db)):
     r = db.query(DBTestRun).filter(DBTestRun.run_id == run_id).first()
     if not r:
@@ -737,7 +784,11 @@ def get_test_run_detail(run_id: str, db: Session = Depends(get_db)):
     }
 
 
-@workbench_router.get("/test-runs/{run_id}/report.html", response_class=HTMLResponse)
+@workbench_router.get(
+    "/test-runs/{run_id}/report.html",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_roles("admin", "operator", "viewer"))],
+)
 def export_test_run_report(run_id: str, db: Session = Depends(get_db)):
     """Exportable HTML conformance report built from one stored run."""
     run = db.query(DBTestRun).filter(DBTestRun.run_id == run_id).first()

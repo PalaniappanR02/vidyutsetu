@@ -54,7 +54,15 @@ def test_root_static_ui_and_service_health(client):
 
     health = client.get("/health")
     assert health.status_code == 200
-    assert health.json() == {"status": "ok", "version": "0.1.0", "db": "ok"}
+    assert health.json() == {"status": "ok", "version": main.app.version, "db": "ok"}
+
+
+def test_request_id_header_is_bounded_and_safely_replaced(client):
+    response = client.get("/health", headers={"X-Request-ID": "untrusted-" + "x" * 100})
+
+    assert response.status_code == 200
+    assert len(response.headers["X-Request-ID"]) == 32
+    assert response.headers["X-Request-ID"].isalnum()
 
 
 def test_service_health_reports_database_error(client, monkeypatch):
@@ -67,6 +75,19 @@ def test_service_health_reports_database_error(client, monkeypatch):
     health = client.get("/health")
     assert health.status_code == 503
     assert health.json() == {"status": "error", "version": main.app.version, "db": "error"}
+
+
+def test_readiness_returns_service_unavailable_when_database_is_down(client, monkeypatch):
+    class UnavailableEngine:
+        def connect(self):
+            raise SQLAlchemyError("database unavailable")
+
+    monkeypatch.setattr(main, "engine", UnavailableEngine())
+
+    response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "not_ready", "database": "error"}
 
 
 def test_openapi_routes_use_category_tags(client):

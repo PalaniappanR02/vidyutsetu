@@ -2,6 +2,24 @@
 
 Welcome to **VidyutSetu**, the AMI Data Exchange Interoperability Testing Workbench. This guide walks you through executing tests, evaluating interoperability scores, and simulating cross-vendor data exchange.
 
+All supplied samples, generated telemetry, and model training data are **SYNTHETIC**.
+The application is a pre-integration testing workbench, not an official standards
+certification system or a live BESCOM integration.
+
+## 0. Sign-in and Roles
+Sign in with an administrator account provisioned for your environment. On a
+first-run local demo, the generated administrator password appears in the server
+console. An administrator can create accounts with one of three roles:
+
+| Role | Access |
+|---|---|
+| Viewer | Read stored runs, reports, analytics, and reference information |
+| Operator | Viewer access plus validation, conversion, generation, and suite execution |
+| Admin | Operator access plus account and access-audit management |
+
+Sign out when using a shared workstation. For deployment and account lifecycle
+details, see [Security and Access](docs/SECURITY_AND_ACCESS.md).
+
 ---
 
 ## 1. Navigating the Interface

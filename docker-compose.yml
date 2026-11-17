@@ -1,11 +1,21 @@
-version: '3.8'
-
 services:
   vidyutsetu:
     build: .
-    container_name: vidyutsetu-workbench
     ports:
-      - "8000:8000"
+      - "${VIDYUTSETU_PORT:-8000}:8000"
+    environment:
+      VIDYUTSETU_ENV: "${VIDYUTSETU_ENV:-development}"
+      VIDYUTSETU_AUTH_MODE: "${VIDYUTSETU_AUTH_MODE:-demo}"
+      VIDYUTSETU_INITIAL_ADMIN_PASSWORD: "${VIDYUTSETU_INITIAL_ADMIN_PASSWORD:-}"
     volumes:
-      - ./vidyutsetu.db:/app/vidyutsetu.db
+      - vidyutsetu-data:/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  vidyutsetu-data:

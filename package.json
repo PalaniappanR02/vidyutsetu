@@ -1,0 +1,34 @@
+{
+  "name": "vidyutsetu",
+  "version": "1.0.0",
+  "description": "![Conformance Status](https://img.shields.io/badge/Standards-IEC%2061968--9%20%7C%20IS%2015959%20%7C%20DLMS--COSEM-emerald)\r ![Architecture](https://img.shields.io/badge/Architecture-FastAPI%20%7C%20Pydantic%20v2%20%7C%20SQLite-blue)\r ![License](https://img.shields.io/badge/License-Apache%202.0-slate)",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "build:frontend": "tailwindcss -c tailwind.config.cjs -i backend/static/tailwind.input.css -o backend/static/tailwind.css --minify",
+    "check:frontend": "node --check backend/static/app.js && npm run build:frontend",
+    "test:browser": "node tests/browser/workbench.spec.cjs",
+    "test": "npm run check:frontend && npm run test:browser"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PalaniappanR02/vidyutsetu.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/PalaniappanR02/vidyutsetu/issues"
+  },
+  "homepage": "https://github.com/PalaniappanR02/vidyutsetu#readme",
+  "dependencies": {
+    "playwright": "^1.65.1"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.17"
+  }
+}

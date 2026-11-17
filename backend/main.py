@@ -1,6 +1,11 @@
 """FastAPI Main Application for VidyutSetu AMI Interoperability Testing Workbench."""
 
 import os
+import logging
+import json
+import time
+import uuid
+import re
 from typing import Optional
 
 from fastapi import FastAPI, Request
@@ -10,9 +15,14 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from backend.db.database import engine, init_db
+from backend.config import settings
+from backend.db import database as database_module
+from backend.db.database import DBAuditEvent, engine, init_db
 from backend.api.routes import router as api_router
 from backend.api.ml_routes import router as ml_router
+from backend.security.auth import ensure_bootstrap_admin, router as auth_router
+
+LOGGER = logging.getLogger("vidyutsetu")
 
 app = FastAPI(
     title="VidyutSetu — AMI Data Exchange Interoperability Testing Workbench",
@@ -20,32 +30,97 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS is same-origin by default. Cross-origin deployments explicitly opt in
-# with a comma-separated VIDYUTSETU_CORS_ORIGINS allow-list.
-cors_origins = [
-    origin.strip()
-    for origin in os.getenv("VIDYUTSETU_CORS_ORIGINS", "").split(",")
-    if origin.strip()
-]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=list(settings.cors_origins),
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token", "X-Request-ID"],
 )
 
 # Initialize SQLite database schema
 init_db()
+ensure_bootstrap_admin()
 
 # Mount API routes
 app.include_router(api_router)
 app.include_router(ml_router)
+app.include_router(auth_router)
 
 # Mount Static UI
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.middleware("http")
+async def request_observability(request: Request, call_next):
+    requested_id = request.headers.get("x-request-id", "")
+    request_id = (
+        requested_id
+        if re.fullmatch(r"[A-Za-z0-9._-]{1,64}", requested_id)
+        else uuid.uuid4().hex
+    )
+    request.state.request_id = request_id
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            request_size = int(content_length)
+        except ValueError:
+            return JSONResponse({"detail": "Invalid Content-Length header."}, status_code=400)
+        if request_size > settings.max_request_bytes:
+            return JSONResponse({"detail": "Request body exceeds the configured size limit."}, status_code=413)
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        LOGGER.exception(
+            "request failed",
+            extra={"request_id": request_id, "method": request.method},
+        )
+        raise
+
+    duration_ms = round((time.perf_counter() - started) * 1000, 2)
+    response.headers["X-Request-ID"] = request_id
+    route = request.scope.get("route")
+    route_template = getattr(route, "path", "unmatched")
+    LOGGER.info(
+        "request completed",
+        extra={
+            "request_id": request_id,
+            "method": request.method,
+            "route": route_template,
+            "status_code": response.status_code,
+            "duration_ms": duration_ms,
+        },
+    )
+
+    if request.url.path.startswith(("/api/", "/ml/")) and not request.url.path.endswith("/health"):
+        principal = getattr(request.state, "principal", None)
+        try:
+            with database_module.SessionLocal() as db:
+                db.add(
+                    DBAuditEvent(
+                        user_id=principal.user_id if principal else None,
+                        event_type=f"{request.method} {route_template}",
+                        outcome="success" if response.status_code < 400 else "failure",
+                        metadata_json=json.dumps(
+                            {
+                                "status_code": response.status_code,
+                                "duration_ms": duration_ms,
+                                "request_id": request_id,
+                            },
+                            separators=(",", ":"),
+                        ),
+                    )
+                )
+                db.commit()
+        except SQLAlchemyError:
+            LOGGER.exception(
+                "request audit event could not be persisted",
+                extra={"request_id": request_id, "route": route_template},
+            )
+    return response
 
 
 def _static_file(name: str) -> Optional[str]:
@@ -193,3 +268,17 @@ def health_check():
         },
         status_code=200 if db_status == "ok" else 503,
     )
+
+
+@app.get("/ready")
+def readiness_check():
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except SQLAlchemyError as error:
+        LOGGER.exception("readiness check failed")
+        return JSONResponse(
+            {"status": "not_ready", "database": "error"},
+            status_code=503,
+        )
+    return {"status": "ready", "database": "ok"}

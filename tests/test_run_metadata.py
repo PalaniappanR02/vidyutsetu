@@ -2,6 +2,7 @@
 
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, text
 
@@ -151,6 +152,8 @@ def test_init_db_adds_run_metadata_columns_to_an_existing_database(monkeypatch, 
 
     columns = {column["name"] for column in inspect(engine).get_columns("test_runs")}
     assert {"model_version", "data_quality_score"} <= columns
+    indexes = {index["name"] for index in inspect(engine).get_indexes("test_runs")}
+    assert "ix_test_runs_execution_time" in indexes
     with engine.connect() as connection:
         row = connection.execute(
             text("SELECT run_id, total_score, model_version FROM test_runs")
@@ -158,6 +161,95 @@ def test_init_db_adds_run_metadata_columns_to_an_existing_database(monkeypatch, 
     assert row.run_id == "RUN-LEGACY"
     assert row.total_score == 88.0
     assert row.model_version is None
+    engine.dispose()
+
+
+def test_init_db_migrates_legacy_suite_runs_foreign_key_without_losing_rows(
+    monkeypatch, tmp_path
+):
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy-suite.db'}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE test_suites ("
+                "id INTEGER PRIMARY KEY, name VARCHAR(255) NOT NULL, "
+                "scenarios_json TEXT NOT NULL DEFAULT '[]', created_at DATETIME)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE TABLE suite_runs ("
+                "id INTEGER PRIMARY KEY, suite_id INTEGER NOT NULL, run_at DATETIME, "
+                "results_json TEXT NOT NULL DEFAULT '[]', "
+                "passed_count INTEGER NOT NULL DEFAULT 0, failed_count INTEGER NOT NULL DEFAULT 0)"
+            )
+        )
+        connection.execute(
+            text("INSERT INTO test_suites (id, name) VALUES (7, 'legacy suite')")
+        )
+        connection.execute(
+            text(
+                "INSERT INTO suite_runs "
+                "(id, suite_id, results_json, passed_count, failed_count) "
+                "VALUES (9, 7, '[]', 1, 0)"
+            )
+        )
+    monkeypatch.setattr(database, "engine", engine)
+
+    database.init_db()
+
+    foreign_keys = inspect(engine).get_foreign_keys("suite_runs")
+    assert any(
+        key["constrained_columns"] == ["suite_id"]
+        and key["referred_table"] == "test_suites"
+        for key in foreign_keys
+    )
+    with engine.connect() as connection:
+        row = connection.execute(
+            text("SELECT id, suite_id, results_json, passed_count FROM suite_runs")
+        ).one()
+    assert tuple(row) == (9, 7, "[]", 1)
+    engine.dispose()
+
+
+def test_init_db_refuses_suite_run_migration_when_orphan_rows_exist(
+    monkeypatch, tmp_path
+):
+    engine = create_engine(f"sqlite:///{tmp_path / 'orphan-suite.db'}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE test_suites ("
+                "id INTEGER PRIMARY KEY, name VARCHAR(255) NOT NULL, "
+                "scenarios_json TEXT NOT NULL DEFAULT '[]', created_at DATETIME)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE TABLE suite_runs ("
+                "id INTEGER PRIMARY KEY, suite_id INTEGER NOT NULL, run_at DATETIME, "
+                "results_json TEXT NOT NULL DEFAULT '[]', "
+                "passed_count INTEGER NOT NULL DEFAULT 0, failed_count INTEGER NOT NULL DEFAULT 0)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO suite_runs "
+                "(id, suite_id, results_json, passed_count, failed_count) "
+                "VALUES (9, 404, '[]', 0, 0)"
+            )
+        )
+    monkeypatch.setattr(database, "engine", engine)
+
+    with pytest.raises(RuntimeError, match="orphaned suite runs"):
+        database.init_db()
+
+    with engine.connect() as connection:
+        row = connection.execute(
+            text("SELECT id, suite_id FROM suite_runs")
+        ).one()
+    assert tuple(row) == (9, 404)
+    assert "suite_runs_migrating" not in inspect(engine).get_table_names()
     engine.dispose()
 
 

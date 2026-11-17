@@ -6,17 +6,17 @@
 git clone https://github.com/PalaniappanR02/vidyutsetu.git
 cd vidyutsetu
 
-# 2. Set up virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# 3. Install dependencies
+# Set up virtual environment, then activate it for your shell
+python -m venv .venv
 pip install -r requirements.txt
 
-# 4. Start workbench server
-uvicorn backend.main:app --host 0.0.0.0 --port 8000
+# Start workbench server
+uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
-Visit `http://localhost:8000` to open the interface.
+In demo mode, the first-run administrator password is logged once to the local
+server console when no initial password is set. Use password mode and a unique
+initial administrator password for any shared or controlled environment. See
+[Security and Access](docs/SECURITY_AND_ACCESS.md).
 
 ---
 
@@ -25,14 +25,27 @@ Visit `http://localhost:8000` to open the interface.
 # Build Docker image
 docker build -t vidyutsetu:latest .
 
-# Run container
-docker run -d -p 8000:8000 -v $(pwd)/vidyutsetu.db:/app/vidyutsetu.db --name vidyutsetu-app vidyutsetu:latest
+# Run container with durable data and password authentication
+docker volume create vidyutsetu-data
+docker run -d -p 8000:8000 \
+  -e VIDYUTSETU_INITIAL_ADMIN_PASSWORD="<set-a-unique-secret>" \
+  -v vidyutsetu-data:/data \
+  --name vidyutsetu-app vidyutsetu:latest
 ```
 
 ### Docker Compose
 ```bash
+# Optional for a local-only demo: defaults to demo auth on localhost port 8000.
 docker-compose up -d
+
+# For a controlled deployment, configure these in the environment first:
+# VIDYUTSETU_ENV=production
+# VIDYUTSETU_AUTH_MODE=password
+# VIDYUTSETU_INITIAL_ADMIN_PASSWORD=<unique-secret>
 ```
+The image runs as a non-root user, persists SQLite data in `/data`, and probes
+`/ready` for container health. Production cookie security defaults to Secure;
+terminate TLS at a trusted reverse proxy and do not expose the app directly.
 
 ---
 
@@ -56,11 +69,15 @@ server {
 ---
 
 ## 4. Cloud Deployment (Free Tier / Container PaaS)
-VidyutSetu is stateless aside from its SQLite database file (`vidyutsetu.db`), making it deployable on platforms like Render, Railway, Fly.io, or AWS ECS:
+VidyutSetu persists its audit and workbench data in SQLite. A platform must provide
+a durable writable volume for `/data`; ephemeral storage is not suitable when
+history must survive restarts. Multi-worker deployment should use a shared
+rate-limiting layer at the reverse proxy because login throttling is local to
+the application database.
 - **Build Command**: `pip install -r requirements.txt`
 - **Start Command**: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
 - **Port**: Set by hosting environment (default 8000).
-- **Persistent Storage**: Mount volume at `/app/vidyutsetu.db` if audit trail persistence across container restarts is required.
+- **Persistent Storage**: Mount a durable volume at `/data`.
 - **Cross-origin access**: The UI is same-origin by default. If a separately hosted
   frontend must call the API, set `VIDYUTSETU_CORS_ORIGINS` to a comma-separated
   allow-list such as `https://workbench.utility.example`; do not use a wildcard.

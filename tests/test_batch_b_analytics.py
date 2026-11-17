@@ -6,6 +6,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
+from app.ml import inference
 from app.ml.preprocessing import AMIPayloadPreprocessor
 from backend.api import ml_routes
 from backend.db import database
@@ -163,7 +164,7 @@ def test_meter_profile_returns_404_for_unknown_meter():
     assert "history" in response.json()["detail"]
 
 
-def test_ml_explain_returns_real_shap_contributions():
+def test_ml_explain_reports_method_and_feature_scores():
     response = client.post(
         "/ml/explain",
         json={
@@ -183,6 +184,10 @@ def test_ml_explain_returns_real_shap_contributions():
     assert response.status_code == 200
     body = response.json()
     assert body["is_synthetic"] is True
+    assert body["method"] in {
+        "shap_tree_explainer",
+        "feature_importance_approximation",
+    }
     explanation = body["explanations"][0]
     assert explanation["reading_index"] == 0
     assert explanation["predicted_fault_type"]
@@ -197,6 +202,18 @@ def test_ml_explain_rejects_an_empty_batch():
     response = client.post("/ml/explain", json={"readings": []})
 
     assert response.status_code == 422
+
+
+def test_ml_explain_labels_importance_fallback_when_shap_is_unavailable(monkeypatch):
+    monkeypatch.setattr(inference, "_load_shap_explainer", lambda _path: None)
+
+    response = client.post(
+        "/ml/explain",
+        json={"readings": [{"meter_serial_number": "MTR-FALLBACK", "voltage_v": 600}]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["method"] == "feature_importance_approximation"
 
 
 def test_ml_health_metrics_are_not_rewritten_by_analytics():

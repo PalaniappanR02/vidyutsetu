@@ -9,6 +9,9 @@ let lastRun = null;
 let lastRunWasSample = false;
 let allIssues = [];
 let diagnosticsExpanded = false;
+let csrfToken = null;
+let currentUser = null;
+let authEnabled = true;
 const DEFAULT_VISIBLE_DIAGNOSTICS = 3;
 
 const STATUS_CLASS = {
@@ -18,16 +21,145 @@ const STATUS_CLASS = {
   skipped: 'pill',
 };
 
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (input, init = {}) => {
+  const request = input instanceof Request ? input : null;
+  const url = new URL(typeof input === 'string' ? input : input.url, window.location.href);
+  const method = String(init.method || (request && request.method) || 'GET').toUpperCase();
+  const headers = new Headers(init.headers || (request && request.headers) || undefined);
+  if (authEnabled && url.origin === window.location.origin && url.pathname !== '/auth/login' &&
+      !['GET', 'HEAD', 'OPTIONS'].includes(method) && csrfToken) {
+    headers.set('X-CSRF-Token', csrfToken);
+  }
+  const response = await nativeFetch(input, { ...init, headers });
+  if (authEnabled && response.status === 401 &&
+      (url.pathname.startsWith('/api/') || url.pathname.startsWith('/ml/'))) {
+    showAuthScreen('Your session expired. Sign in again to continue.');
+  }
+  return response;
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
   applyStoredTheme();
   applyGettingStartedPreference();
   if (window.lucide) lucide.createIcons();
+  if (!await initializeAuthentication()) return;
+  await loadWorkbench();
+});
+
+async function loadWorkbench() {
   await loadVendors();
   await refreshDashboard();
   await loadMlHealth();
   await renderHeatmap();
   handleEntryParams();
-});
+}
+
+async function initializeAuthentication() {
+  try {
+    const response = await fetch('/auth/me');
+    if (!response.ok) {
+      showAuthScreen(response.status === 401 ? '' : 'The authentication service is unavailable. Try again shortly.');
+      return false;
+    }
+    const data = await response.json();
+    authEnabled = data.auth_enabled === true;
+    csrfToken = data.csrf_token || null;
+    currentUser = data.user || { username: 'Local development', role: 'admin' };
+    showWorkbench();
+    return true;
+  } catch (error) {
+    showAuthScreen(`Could not reach the sign-in service: ${error.message}`);
+    return false;
+  }
+}
+
+function showAuthScreen(message = '') {
+  const shell = document.getElementById('workbench-shell');
+  const screen = document.getElementById('auth-screen');
+  if (shell) shell.hidden = true;
+  if (screen) {
+    screen.classList.remove('hidden');
+    screen.classList.add('flex');
+  }
+  const error = document.getElementById('login-error');
+  if (error) {
+    error.textContent = message;
+    error.classList.toggle('hidden', !message);
+  }
+}
+
+function showWorkbench() {
+  const shell = document.getElementById('workbench-shell');
+  const screen = document.getElementById('auth-screen');
+  if (shell) shell.hidden = false;
+  if (screen) {
+    screen.classList.add('hidden');
+    screen.classList.remove('flex');
+  }
+  const userLabel = document.getElementById('current-user');
+  const logoutButton = document.getElementById('logout-button');
+  const adminButton = document.getElementById('manage-users');
+  if (userLabel && authEnabled && currentUser) {
+    userLabel.textContent = `${currentUser.username} · ${currentUser.role}`;
+    userLabel.hidden = false;
+  }
+  if (logoutButton) logoutButton.hidden = !authEnabled;
+  if (adminButton) adminButton.hidden = !authEnabled || !currentUser || currentUser.role !== 'admin';
+  applyRoleVisibility();
+}
+
+function applyRoleVisibility() {
+  const role = currentUser ? currentUser.role : 'admin';
+  const levels = { viewer: 1, operator: 2, admin: 3 };
+  document.querySelectorAll('[data-role-required]').forEach(element => {
+    const required = element.getAttribute('data-role-required');
+    element.hidden = (levels[role] || 0) < (levels[required] || 99);
+  });
+}
+
+async function login(event) {
+  event.preventDefault();
+  const submit = document.getElementById('login-submit');
+  const error = document.getElementById('login-error');
+  const username = document.getElementById('login-username').value;
+  const password = document.getElementById('login-password').value;
+  submit.disabled = true;
+  error.textContent = '';
+  error.classList.add('hidden');
+  try {
+    const response = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || `Sign in failed (${response.status}).`);
+    authEnabled = data.auth_enabled === true;
+    csrfToken = data.csrf_token || null;
+    currentUser = data.user || { username: 'Local development', role: 'admin' };
+    document.getElementById('login-password').value = '';
+    showWorkbench();
+    await loadWorkbench();
+  } catch (loginError) {
+    error.textContent = loginError.message;
+    error.classList.remove('hidden');
+  } finally {
+    submit.disabled = false;
+  }
+}
+
+async function logout() {
+  try {
+    await fetch('/auth/logout', { method: 'POST' });
+  } catch (error) {
+    console.error('Sign out request failed', error);
+  }
+  csrfToken = null;
+  currentUser = null;
+  showAuthScreen('You have signed out.');
+  document.getElementById('login-password').value = '';
+}
 
 /** Deep links: /dashboard?sample=1 runs the synthetic sample straight away. */
 function handleEntryParams() {
@@ -153,6 +285,8 @@ function toggleTheme() {
 /* ---------- tabs ---------- */
 
 function switchTab(tabId) {
+  if (authEnabled && currentUser && currentUser.role === 'viewer' &&
+      ['workbench', 'compare', 'roundtrip'].includes(tabId)) return;
   activeTab = tabId;
   document.querySelectorAll('.tab-view').forEach(el => el.classList.add('hidden'));
   document.querySelectorAll('.nav-tab[role="tab"]').forEach(el => el.setAttribute('aria-selected', 'false'));
@@ -418,11 +552,16 @@ async function generateSyntheticIntoWorkbench() {
     const url = `/api/generate?vendor_id=${vendorId}&meter_count=${meters}&intervals=${intervals}&inject_anomalies=${anomalies}&inject_tampers=${tampers}`;
     const res = await fetch(url, { method: 'POST' });
     const data = await res.json();
+    if (!res.ok) {
+      throw new Error((data && (data.detail || data.message)) || `Generation failed with ${res.status}`);
+    }
     const payload = data.payload;
     document.getElementById('raw-payload-input').value =
       typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+    clearFormError();
   } catch (e) {
-    alert('Failed to generate synthetic data: ' + e.message);
+    console.error('Failed to generate synthetic data', e);
+    showFormError(`Failed to generate synthetic data: ${e.message}. Check the selected vendor and try again.`);
   }
 }
 
@@ -430,8 +569,10 @@ async function loadSamplePreset(vendorId) {
   document.getElementById('source-vendor-select').value = vendorId;
   try {
     const res = await fetch(`/api/generate?vendor_id=${vendorId}&meter_count=2&intervals=4`, { method: 'POST' });
-    if (!res.ok) throw new Error(`/api/generate returned ${res.status}`);
     const data = await res.json();
+    if (!res.ok) {
+      throw new Error((data && (data.detail || data.message)) || `Sample failed with ${res.status}`);
+    }
     document.getElementById('raw-payload-input').value =
       typeof data.payload === 'string' ? data.payload : JSON.stringify(data.payload, null, 2);
     clearFormError();
@@ -473,7 +614,36 @@ function validateWorkbenchInput() {
   const fileInput = document.getElementById('file-upload-input');
   const raw = document.getElementById('raw-payload-input').value;
 
-  if (fileInput.files.length > 0) return { ok: true };
+  if (fileInput.files.length > 0) {
+    const file = fileInput.files[0];
+    const allowedExtensions = ['.json', '.csv'];
+    const name = file.name || '';
+    const extension = name.includes('.') ? name.slice(name.lastIndexOf('.')).toLowerCase() : '';
+    const isAllowedExtension = allowedExtensions.includes(extension);
+    const isAllowedMime = ['application/json', 'text/csv', 'application/csv', 'text/plain'].includes(file.type || '');
+    if (!isAllowedExtension && !isAllowedMime) {
+      return {
+        ok: false,
+          message: `Unsupported file type: ${file.name || 'this file'}. Upload a JSON or CSV payload only.`,
+        focus: 'file-upload-input',
+      };
+    }
+      if (!isAllowedExtension || (file.type && !isAllowedMime)) {
+        return {
+          ok: false,
+          message: 'Choose a JSON or CSV file with a matching file type.',
+          focus: 'file-upload-input',
+        };
+      }
+    if ((file.size || 0) > 5 * 1024 * 1024) {
+      return {
+        ok: false,
+        message: 'The uploaded file is too large. Use a payload under 5 MB.',
+        focus: 'file-upload-input',
+      };
+    }
+    return { ok: true };
+  }
   if (!raw.trim()) {
     return {
       ok: false,
@@ -501,6 +671,12 @@ function validateWorkbenchInput() {
     };
   }
   return { ok: true };
+}
+
+function handleFetchFailure(prefix, error) {
+  const detail = error && error.message ? error.message : String(error || 'Unknown error');
+  console.error(prefix, error);
+  showFormError(`${prefix}: ${detail}`);
 }
 
 function renderPendingStages() {
@@ -1032,9 +1208,10 @@ async function loadSuites() {
         <td><strong style="color:var(--vs-ink)">${esc(suite.name)}</strong><div class="label">id ${esc(suite.id)}</div></td>
         <td>${(suite.scenarios || []).length}</td>
         <td>${esc(fmtDate(suite.created_at))}</td>
-        <td><button class="btn" onclick="runSuite(${Number(suite.id)})">Run suite</button></td>
+        <td><button class="btn" data-role-required="operator" onclick="runSuite(${Number(suite.id)})">Run suite</button></td>
       </tr>
     `).join('');
+    applyRoleVisibility();
   } catch (e) {
     body.innerHTML = `<tr><td colspan="4" class="muted">Could not load suites: ${esc(e.message)}</td></tr>`;
   }
@@ -1144,8 +1321,145 @@ function closeModal() {
   document.getElementById('detail-modal').classList.remove('flex');
 }
 
-function copyCode(elementId) {
-  const text = document.getElementById(elementId).innerText;
-  navigator.clipboard.writeText(text);
-  alert('Payload copied to clipboard.');
+async function copyCode(elementId) {
+  const el = document.getElementById(elementId);
+  const text = el ? (el.innerText || el.value || '') : '';
+  if (!text) {
+    alert('There is nothing to copy yet.');
+    return;
+  }
+
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const helper = document.createElement('textarea');
+      helper.value = text;
+      helper.setAttribute('readonly', 'true');
+      helper.style.position = 'fixed';
+      helper.style.top = '-9999px';
+      document.body.appendChild(helper);
+      helper.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(helper);
+      if (!copied) throw new Error('Copy command was rejected by the browser.');
+    }
+    alert('Payload copied to clipboard.');
+  } catch (error) {
+    console.error('Clipboard copy failed', error);
+    alert(`Clipboard copy failed: ${error.message || 'unknown browser error'}`);
+  }
+}
+
+async function openUserAdmin() {
+  const modal = document.getElementById('detail-modal');
+  document.getElementById('modal-title').textContent = 'User management';
+  document.getElementById('modal-content').innerHTML = `
+    <form id="create-user-form" class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+      <div><label class="label" for="new-username">Username</label><input id="new-username" class="input mt-1 w-full" minlength="3" maxlength="64" required></div>
+      <div><label class="label" for="new-password">Temporary password</label><input id="new-password" type="password" class="input mt-1 w-full" minlength="12" maxlength="256" autocomplete="new-password" required></div>
+      <div><label class="label" for="new-role">Role</label><select id="new-role" class="select mt-1 w-full"><option value="operator">Operator</option><option value="viewer">Viewer / Auditor</option><option value="admin">Administrator</option></select></div>
+      <button class="btn btn-primary" type="submit">Create account</button>
+    </form>
+    <p id="user-admin-error" class="notice mt-3 hidden" role="status"></p>
+    <div id="user-admin-list" class="mt-4 overflow-x-auto">Loading accounts…</div>`;
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  document.getElementById('create-user-form').addEventListener('submit', createManagedUser);
+  await loadManagedUsers();
+}
+
+async function loadManagedUsers() {
+  const list = document.getElementById('user-admin-list');
+  if (!list) return;
+  try {
+    const response = await fetch('/auth/users');
+    const users = await response.json();
+    if (!response.ok) throw new Error(users.detail || `Could not load users (${response.status}).`);
+    list.innerHTML = `<table class="vs w-full"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+      ${users.map(user => `
+        <tr>
+          <td>${esc(user.username)}</td>
+          <td><select id="user-role-${Number(user.id)}" class="select">
+            ${['admin', 'operator', 'viewer'].map(role => `<option value="${role}" ${role === user.role ? 'selected' : ''}>${role}</option>`).join('')}
+          </select></td>
+          <td>${user.is_active ? 'Active' : 'Disabled'}</td>
+          <td class="space-x-1">
+            <button class="btn" type="button" onclick="saveManagedUser(${Number(user.id)}, ${!user.is_active})">Save role / ${user.is_active ? 'disable' : 'enable'}</button>
+            <input id="user-password-${Number(user.id)}" type="password" class="input mt-1" minlength="12" maxlength="256" autocomplete="new-password" aria-label="New password for ${esc(user.username)}">
+            <button class="btn" type="button" onclick="resetManagedPassword(${Number(user.id)})">Reset password</button>
+          </td>
+        </tr>`).join('')}
+    </tbody></table>`;
+  } catch (error) {
+    list.textContent = `Could not load accounts: ${error.message}`;
+  }
+}
+
+function showUserAdminError(message) {
+  const error = document.getElementById('user-admin-error');
+  if (!error) return;
+  error.textContent = message;
+  error.classList.remove('hidden');
+}
+
+async function createManagedUser(event) {
+  event.preventDefault();
+  const payload = {
+    username: document.getElementById('new-username').value,
+    password: document.getElementById('new-password').value,
+    role: document.getElementById('new-role').value,
+  };
+  try {
+    const response = await fetch('/auth/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || `Account creation failed (${response.status}).`);
+    document.getElementById('create-user-form').reset();
+    await loadManagedUsers();
+    showUserAdminError(`Account ${result.username} created as ${result.role}.`);
+  } catch (error) {
+    showUserAdminError(error.message);
+  }
+}
+
+async function saveManagedUser(userId, active) {
+  const role = document.getElementById(`user-role-${userId}`).value;
+  try {
+    const response = await fetch(`/auth/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role, is_active: active }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || `Account update failed (${response.status}).`);
+    await loadManagedUsers();
+    showUserAdminError(`Account ${result.username} updated.`);
+  } catch (error) {
+    showUserAdminError(error.message);
+  }
+}
+
+async function resetManagedPassword(userId) {
+  const field = document.getElementById(`user-password-${userId}`);
+  if (!field || field.value.length < 12) {
+    showUserAdminError('Enter a temporary password with at least 12 characters.');
+    return;
+  }
+  try {
+    const response = await fetch(`/auth/users/${userId}/password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: field.value }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || `Password reset failed (${response.status}).`);
+    field.value = '';
+    showUserAdminError('Password updated; active sessions for this account were revoked.');
+  } catch (error) {
+    showUserAdminError(error.message);
+  }
 }

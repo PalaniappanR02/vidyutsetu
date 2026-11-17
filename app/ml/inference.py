@@ -204,20 +204,69 @@ def make_ml_findings(predictions: Sequence[Mapping[str, Any]]) -> list[dict[str,
 
 @lru_cache(maxsize=2)
 def _load_shap_explainer(artifacts_dir: str) -> Any:
-    """Build a SHAP tree explainer over the *existing* classifier (no retraining)."""
-    import shap
+    """Build a SHAP tree explainer over the *existing* classifier (no retraining).
+
+    SHAP is optional at runtime: when it is unavailable, the API falls back to a
+    feature-importance score derived from the trained model so execution remains
+    stable without changing the public response contract.
+    """
+    try:
+        import shap
+    except ModuleNotFoundError:
+        return None
 
     classifier, _detector, _label_encoder, _schema, _metrics = _load_models(artifacts_dir)
     return shap.TreeExplainer(classifier.named_steps["classifier"])
 
 
+def explanation_method() -> str:
+    """Return the method actually available for the current model artifacts."""
+    artifacts_dir = str(ARTIFACTS_DIR.resolve())
+    return (
+        "shap_tree_explainer"
+        if _load_shap_explainer(artifacts_dir) is not None
+        else "feature_importance_approximation"
+    )
+
+
+def _fallback_contributions(
+    classifier: Any,
+    transformed: np.ndarray,
+    feature_names: list[str],
+) -> np.ndarray:
+    """Estimate feature contributions from model importances when SHAP is unavailable."""
+    model = classifier.named_steps["classifier"]
+    importances = getattr(model, "feature_importances_", None)
+    if importances is None:
+        coefficients = getattr(model, "coef_", None)
+        if coefficients is None:
+            importances = np.ones(len(feature_names), dtype=float)
+        elif np.asarray(coefficients).ndim == 1:
+            importances = np.abs(np.asarray(coefficients, dtype=float))
+        else:
+            importances = np.mean(np.abs(np.asarray(coefficients, dtype=float)), axis=0)
+    importances = np.asarray(importances, dtype=float)
+    if importances.shape[0] != transformed.shape[1]:
+        importances = np.ones(transformed.shape[1], dtype=float)
+
+    if transformed.size == 0:
+        return np.zeros((len(feature_names),), dtype=float)
+
+    values = np.asarray(transformed, dtype=float)
+    means = values.mean(axis=0)
+    scales = values.std(axis=0)
+    scales[scales == 0.0] = 1.0
+    return (values - means) / scales * importances
+
+
 def explain_canonical_readings(
     readings: Sequence[Any], top_k: int = 3
 ) -> list[dict[str, Any]]:
-    """SHAP contributions for the predicted class of each reading.
+    """Feature contributions for the predicted class of each reading.
 
-    Explains the saved XGBoost classifier only; nothing is retrained and the
-    artifact files are opened read-only.
+    If the optional SHAP dependency is installed, the saved model is explained with a
+    tree explainer. Otherwise, the function falls back to a feature-importance-based
+    approximation that preserves the same response structure and output semantics.
     """
     if not readings:
         return []
@@ -230,16 +279,26 @@ def explain_canonical_readings(
     records = [canonical_reading_to_features(reading) for reading in readings]
     transformed = preprocessor.transform(records)
     feature_names = list(preprocessor.get_feature_names_out())
-    contributions = np.asarray(explainer.shap_values(transformed))
-    if contributions.ndim == 2:
-        contributions = contributions[:, :, np.newaxis]
+
+    if explainer is None:
+        contributions = _fallback_contributions(classifier, transformed, feature_names)
+        if contributions.ndim == 1:
+            contributions = contributions[np.newaxis, :]
+    else:
+        raw_contributions = np.asarray(explainer.shap_values(transformed))
+        contributions = raw_contributions
+        if contributions.ndim == 2:
+            contributions = contributions[:, :, np.newaxis]
 
     encoded_predictions = classifier.predict(records)
     classifier_classes = list(classifier.named_steps["classifier"].classes_)
     explanations: list[dict[str, Any]] = []
     for index, (encoded, record) in enumerate(zip(encoded_predictions, records, strict=True)):
-        class_position = classifier_classes.index(encoded)
-        per_feature = contributions[index][:, class_position]
+        if contributions.ndim == 3:
+            class_position = classifier_classes.index(encoded)
+            per_feature = contributions[index][:, class_position]
+        else:
+            per_feature = contributions[index]
         order = np.argsort(-np.abs(per_feature))[:top_k]
         explanations.append(
             {

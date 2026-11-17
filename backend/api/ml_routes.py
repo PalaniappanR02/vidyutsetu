@@ -11,9 +11,11 @@ from sqlalchemy.orm import Session
 
 from backend.engine.history_analytics import build_meter_profile
 from backend.db.database import DBMeterHistory, get_db
+from backend.security.auth import require_roles
 from app.ml.inference import (
     MLArtifactsError,
     explain_canonical_readings,
+    explanation_method,
     get_ml_health,
     make_ml_findings,
     predict_canonical_readings,
@@ -115,7 +117,9 @@ def ml_health():
         raise _unavailable(error) from error
 
 
-@router.post("/validate")
+@router.post(
+    "/validate", dependencies=[Depends(require_roles("admin", "operator", write=True))]
+)
 def validate_reading(reading: CanonicalReadingInput, db: Session = Depends(get_db)):
     try:
         predictions = _validate_with_meter_history([reading], db)
@@ -129,7 +133,10 @@ def validate_reading(reading: CanonicalReadingInput, db: Session = Depends(get_d
     }
 
 
-@router.post("/validate-batch")
+@router.post(
+    "/validate-batch",
+    dependencies=[Depends(require_roles("admin", "operator", write=True))],
+)
 def validate_reading_batch(batch: BatchValidationInput, db: Session = Depends(get_db)):
     try:
         predictions = _validate_with_meter_history(batch.readings, db)
@@ -143,7 +150,9 @@ def validate_reading_batch(batch: BatchValidationInput, db: Session = Depends(ge
     }
 
 
-@router.get("/meters")
+@router.get(
+    "/meters", dependencies=[Depends(require_roles("admin", "operator", "viewer"))]
+)
 def list_meters_with_history(db: Session = Depends(get_db)):
     """Meters that currently have stored readings, newest arrival first."""
     counts = dict(
@@ -179,7 +188,10 @@ def list_meters_with_history(db: Session = Depends(get_db)):
     return meters
 
 
-@router.get("/meters/{meter_id}/profile")
+@router.get(
+    "/meters/{meter_id}/profile",
+    dependencies=[Depends(require_roles("admin", "operator", "viewer"))],
+)
 def meter_profile(meter_id: str, db: Session = Depends(get_db)):
     """Behaviour profile and arrival-order drift for one meter's stored history."""
     rows = (
@@ -205,7 +217,9 @@ def meter_profile(meter_id: str, db: Session = Depends(get_db)):
     )
 
 
-@router.post("/explain")
+@router.post(
+    "/explain", dependencies=[Depends(require_roles("admin", "operator", write=True))]
+)
 def explain_reading_batch(batch: ExplanationInput):
     """SHAP feature contributions from the saved classifier (no retraining)."""
     try:
@@ -214,7 +228,7 @@ def explain_reading_batch(batch: ExplanationInput):
     except MLArtifactsError as error:
         raise _unavailable(error) from error
     return {
-        "method": "shap_tree_explainer",
+        "method": explanation_method(),
         "explanations": explanations,
         "is_synthetic": is_synthetic,
     }

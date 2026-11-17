@@ -8,9 +8,8 @@
   <link rel="icon" href="/static/icon-light-32x32.png" sizes="32x32" media="(prefers-color-scheme: light)">
   <link rel="icon" href="/static/icon-dark-32x32.png" sizes="32x32" media="(prefers-color-scheme: dark)">
   <link rel="apple-touch-icon" href="/static/apple-icon.png">
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/tailwind.css">
   <script src="https://unpkg.com/lucide@latest"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       --vs-bg: #F4F8FB;
@@ -153,7 +152,26 @@
       }
       header > div { padding-left: .85rem; padding-right: .85rem; }
       .card-pad { padding: 1rem 1.05rem; }
+      .vs-utility { width: 100%; justify-content: flex-end; }
+      .vs-nav { width: 100%; }
       #results-container, #view-workbench, #view-overview > .card, #diagnostics-card { scroll-margin-top: 8.5rem; }
+    }
+
+    @media (max-width: 480px) {
+      .vs-nav-group {
+        width: 100%;
+      }
+      .nav-tabs {
+        width: 100%;
+        justify-content: flex-start;
+      }
+      .vs-utility {
+        width: 100%;
+        justify-content: space-between;
+      }
+      .btn, .nav-tab {
+        min-height: 2.5rem;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -430,6 +448,7 @@
 
   <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to content</a>
 
+  <div id="workbench-shell" hidden>
   <header style="background: var(--vs-navy);" class="sticky top-0 z-40">
     <div class="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
       <div class="flex items-center gap-3">
@@ -446,9 +465,9 @@
         <div class="vs-nav-group">
           <span class="vs-nav-label" aria-hidden="true">Test</span>
           <div class="nav-tabs" role="tablist" aria-label="Test sections">
-            <button role="tab" aria-selected="false" id="tab-btn-workbench" class="nav-tab" onclick="switchTab('workbench')">Workbench</button>
-            <button role="tab" aria-selected="false" id="tab-btn-compare" class="nav-tab" onclick="switchTab('compare')">Compare</button>
-            <button role="tab" aria-selected="false" id="tab-btn-roundtrip" class="nav-tab" onclick="switchTab('roundtrip')">Roundtrip</button>
+            <button role="tab" aria-selected="false" id="tab-btn-workbench" class="nav-tab" onclick="switchTab('workbench')" data-role-required="operator">Workbench</button>
+            <button role="tab" aria-selected="false" id="tab-btn-compare" class="nav-tab" onclick="switchTab('compare')" data-role-required="operator">Compare</button>
+            <button role="tab" aria-selected="false" id="tab-btn-roundtrip" class="nav-tab" onclick="switchTab('roundtrip')" data-role-required="operator">Roundtrip</button>
             <button role="tab" aria-selected="false" id="tab-btn-suites" class="nav-tab" onclick="switchTab('suites')">Suites</button>
           </div>
         </div>
@@ -472,6 +491,9 @@
       </nav>
 
       <div class="vs-utility">
+        <span class="pill" id="current-user" hidden></span>
+        <button id="manage-users" class="nav-tab" onclick="openUserAdmin()" data-role-required="admin" hidden>Manage users</button>
+        <button id="logout-button" class="nav-tab" onclick="logout()" hidden>Sign out</button>
         <span class="pill" id="standards-badge" style="background:rgba(255,255,255,.12);color:#DFF1F4;border-color:rgba(255,255,255,.25)">
           <span style="width:7px;height:7px;border-radius:999px;background:#19C2D0;display:inline-block" aria-hidden="true"></span>
           IEC 61968-9 aligned
@@ -505,7 +527,7 @@
             </ol>
           </div>
           <div class="flex flex-col gap-2">
-            <button class="btn btn-cta" onclick="runSampleValidation()">
+            <button class="btn btn-cta" onclick="runSampleValidation()" data-role-required="operator">
               <i data-lucide="sparkles" class="w-4 h-4"></i><span>Try sample validation</span>
             </button>
             <button class="btn" onclick="switchTab('workbench')">Open workbench</button>
@@ -602,13 +624,13 @@
             <p class="label">Choose vendor formats, paste a payload or generate synthetic telemetry, then run the five-stage pipeline.</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-            <button class="btn btn-cta" onclick="runSampleValidation()">Try sample validation</button>
+            <button class="btn btn-cta" onclick="runSampleValidation()" data-role-required="operator">Try sample validation</button>
             <div class="sample-group">
               <span class="label">Load sample:</span>
-              <button class="btn" onclick="loadSamplePreset('alpha-hes')">Alpha sample</button>
-              <button class="btn" onclick="loadSamplePreset('beta-hes')">Beta sample</button>
-              <button class="btn" onclick="loadSamplePreset('gamma-mdms')">Gamma sample</button>
-              <button class="btn" onclick="loadSamplePreset('delta-legacy')">Delta sample</button>
+              <button class="btn" onclick="loadSamplePreset('alpha-hes')" data-role-required="operator">Alpha sample</button>
+              <button class="btn" onclick="loadSamplePreset('beta-hes')" data-role-required="operator">Beta sample</button>
+              <button class="btn" onclick="loadSamplePreset('gamma-mdms')" data-role-required="operator">Gamma sample</button>
+              <button class="btn" onclick="loadSamplePreset('delta-legacy')" data-role-required="operator">Delta sample</button>
             </div>
           </div>
         </div>
@@ -634,7 +656,7 @@
             <div class="p-4 rounded-xl space-y-3" style="background:var(--vs-surface-alt);border:1px solid var(--vs-line)">
               <div class="flex items-center justify-between gap-2">
                 <span class="text-xs font-bold" style="color:var(--vs-body)">Synthetic AMI data generator</span>
-                <button class="btn-cta btn" onclick="generateSyntheticIntoWorkbench()">Generate payload</button>
+                <button class="btn-cta btn" onclick="generateSyntheticIntoWorkbench()" data-role-required="operator">Generate payload</button>
               </div>
               <div class="grid grid-cols-2 gap-3 text-xs">
                 <div>
@@ -666,7 +688,7 @@
 
             <div>
               <p id="form-error" class="text-xs mb-2 hidden" role="alert" style="color:var(--vs-red)"></p>
-              <button id="btn-run-workbench" class="btn btn-primary w-full py-3" onclick="runWorkbenchExecution()">
+              <button id="btn-run-workbench" class="btn btn-primary w-full py-3" onclick="runWorkbenchExecution()" data-role-required="operator">
                 <i data-lucide="play" class="w-4 h-4"></i>
                 <span>Run validation and transformation</span>
               </button>
@@ -690,7 +712,7 @@
               <div class="rounded-xl p-5 text-center" style="border:2px dashed var(--vs-line-strong);background:var(--vs-surface-alt)">
                 <i data-lucide="upload-cloud" class="w-7 h-7 mx-auto mb-2" style="color:var(--vs-muted)"></i>
                 <label class="text-xs font-medium body-text block" for="file-upload-input">Or upload a JSON/CSV payload file</label>
-                <input type="file" id="file-upload-input" class="text-xs mt-2 mx-auto">
+                <input type="file" id="file-upload-input" class="text-xs mt-2 mx-auto" accept=".json,.csv,text/csv,application/json" aria-label="Upload a JSON or CSV payload file">
               </div>
 
               <div class="p-4 rounded-xl text-xs space-y-2" style="background:var(--vs-surface-alt);border:1px solid var(--vs-line)">
@@ -899,7 +921,7 @@
             <select id="compare-candidate" class="select mt-1"></select>
           </div>
           <div class="flex items-end gap-2">
-            <button class="btn btn-primary" onclick="runComparison()">Compare runs</button>
+            <button class="btn btn-primary" onclick="runComparison()" data-role-required="operator">Compare runs</button>
             <button class="btn" onclick="loadRunOptions()">Reload runs</button>
           </div>
         </div>
@@ -963,7 +985,7 @@
             </select>
           </div>
           <div class="flex items-end gap-2">
-            <button class="btn btn-primary" onclick="runRoundtrip()">Run round trip</button>
+            <button class="btn btn-primary" onclick="runRoundtrip()" data-role-required="operator">Run round trip</button>
             <button class="btn" onclick="loadRoundtripSample()">Load sample</button>
           </div>
         </div>
@@ -1075,6 +1097,27 @@
     <span>VidyutSetu · engineering workbench for AMI interoperability</span>
     <span><a class="link" href="/">Landing page</a> · <a class="link" href="/docs">API docs</a></span>
   </footer>
+  </div>
+
+  <section id="auth-screen" class="fixed inset-0 z-50 hidden items-center justify-center p-4" style="background:rgba(11,37,69,.82)" aria-labelledby="auth-title">
+    <div class="card w-full max-w-md card-pad">
+      <p class="label">Authorized access</p>
+      <h1 id="auth-title" class="text-xl font-bold" style="color:var(--vs-ink)">Sign in to VidyutSetu</h1>
+      <p class="text-sm body-text mt-2">Use your assigned account to access AMI validation data and reports.</p>
+      <form id="login-form" class="space-y-3 mt-5" onsubmit="login(event)">
+        <div>
+          <label class="label" for="login-username">Username</label>
+          <input id="login-username" name="username" class="input mt-1 w-full" autocomplete="username" required maxlength="64">
+        </div>
+        <div>
+          <label class="label" for="login-password">Password</label>
+          <input id="login-password" name="password" type="password" class="input mt-1 w-full" autocomplete="current-password" required maxlength="256">
+        </div>
+        <p id="login-error" class="text-sm hidden" role="alert" aria-live="assertive" style="color:var(--vs-red)"></p>
+        <button id="login-submit" class="btn btn-primary w-full" type="submit">Sign in</button>
+      </form>
+    </div>
+  </section>
 
   <div id="detail-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" style="background:rgba(11,37,69,.65)">
     <div class="card w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">

@@ -4,6 +4,11 @@ Every test gets its own in-memory SQLite database so stored meter history and
 persisted runs can never leak between tests (or into the repository database).
 """
 
+import os
+
+os.environ.setdefault("VIDYUTSETU_ENV", "test")
+os.environ.setdefault("VIDYUTSETU_AUTH_MODE", "disabled")
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
