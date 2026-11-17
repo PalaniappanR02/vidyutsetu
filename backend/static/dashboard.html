@@ -135,6 +135,21 @@
     a.link { color: var(--vs-teal-deep); text-decoration: underline; text-underline-offset: 2px; }
     [data-theme="dark"] a.link { color: #7FE3EC; }
 
+    /* Keep scroll-into-view targets clear of the sticky header. */
+    #results-container, #view-workbench, #view-overview > .card, #diagnostics-card { scroll-margin-top: 7rem; }
+
+    @media (max-width: 768px) {
+      /* One scrollable tab row, so the sticky header does not eat the viewport. */
+      nav[role="tablist"] {
+        flex-wrap: nowrap; overflow-x: auto; width: 100%;
+        scrollbar-width: none; -ms-overflow-style: none;
+      }
+      nav[role="tablist"]::-webkit-scrollbar { display: none; }
+      header > div { padding-left: .85rem; padding-right: .85rem; }
+      .card-pad { padding: 1rem 1.05rem; }
+      #results-container, #view-workbench, #view-overview > .card, #diagnostics-card { scroll-margin-top: 8.5rem; }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important;
                                transition-duration: .01ms !important; scroll-behavior: auto !important; }
@@ -184,6 +199,30 @@
 
     <!-- OVERVIEW -->
     <section id="view-overview" class="tab-view space-y-6" role="tabpanel" aria-labelledby="tab-btn-overview">
+      <div id="getting-started" class="card card-pad">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div class="max-w-2xl">
+            <h2 class="font-bold" style="color:var(--vs-ink)">New here? Run one sample first</h2>
+            <p class="text-sm body-text mt-1">
+              A sample takes one click: it loads synthetic telemetry for a chosen vendor format, runs
+              all five pipeline stages, and shows you a real result. Nothing you see is customer data.
+            </p>
+            <ol class="text-xs body-text mt-2 space-y-1 list-decimal pl-4">
+              <li>Choose source and target systems (or keep the defaults).</li>
+              <li>Load a sample payload, generate one, or paste your own.</li>
+              <li>Run validation and read the verdict, stages and diagnostics.</li>
+            </ol>
+          </div>
+          <div class="flex flex-col gap-2">
+            <button class="btn btn-cta" onclick="runSampleValidation()">
+              <i data-lucide="sparkles" class="w-4 h-4"></i><span>Try sample validation</span>
+            </button>
+            <button class="btn" onclick="switchTab('workbench')">Open workbench</button>
+            <button class="btn" onclick="dismissGettingStarted()">I know my way around</button>
+          </div>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="card card-pad">
           <p class="label">Test executions</p>
@@ -268,6 +307,7 @@
             <p class="label">Choose vendor formats, paste a payload or generate synthetic telemetry, then run the five-stage pipeline.</p>
           </div>
           <div class="flex flex-wrap gap-2">
+            <button class="btn btn-cta" onclick="runSampleValidation()">Try sample validation</button>
             <button class="btn" onclick="loadSamplePreset('alpha-hes')">Alpha sample</button>
             <button class="btn" onclick="loadSamplePreset('beta-hes')">Beta sample</button>
             <button class="btn" onclick="loadSamplePreset('gamma-mdms')">Gamma sample</button>
@@ -351,15 +391,35 @@
               </div>
             </div>
 
-            <button id="btn-run-workbench" class="btn btn-primary w-full py-3" onclick="runWorkbenchExecution()">
-              <i data-lucide="play" class="w-4 h-4"></i>
-              <span>Run validation and transformation</span>
-            </button>
+            <div>
+              <p id="form-error" class="text-xs mb-2 hidden" role="alert" style="color:var(--vs-red)"></p>
+              <button id="btn-run-workbench" class="btn btn-primary w-full py-3" onclick="runWorkbenchExecution()">
+                <i data-lucide="play" class="w-4 h-4"></i>
+                <span>Run validation and transformation</span>
+              </button>
+              <p id="run-status" class="text-xs mt-2 hidden" role="status" aria-live="polite" style="color:var(--vs-body)"></p>
+            </div>
           </div>
         </div>
       </div>
 
       <div id="results-container" class="hidden space-y-6">
+        <div id="result-verdict" class="card card-pad" role="status" aria-live="polite">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p class="label">Result</p>
+              <h2 class="text-lg font-bold" id="verdict-title" style="color:var(--vs-ink)">—</h2>
+              <p class="text-sm body-text mt-1" id="verdict-reason"></p>
+              <p class="label mt-2" id="verdict-sample-note" hidden>Sample data: this run used a synthetic payload generated by the workbench.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button class="btn" onclick="focusDiagnostics()">Inspect diagnostics</button>
+              <button class="btn" onclick="runWorkbenchExecution()">Run again</button>
+              <a class="btn hidden" id="verdict-report-link" href="#" target="_blank" rel="noopener">Export report</a>
+            </div>
+          </div>
+        </div>
+
         <div class="card card-pad">
           <div class="flex flex-wrap items-start justify-between gap-4 pb-4" style="border-bottom:1px solid var(--vs-line)">
             <div>
@@ -370,6 +430,10 @@
                 </h2>
               </div>
               <p id="res-summary-text" class="text-xs body-text mt-1.5"></p>
+              <p class="label mt-1.5">
+                Score = syntactic 30% + semantic 40% + data integrity 30%, from rule checks only.
+                The ML screen is advisory and does not change it.
+              </p>
             </div>
             <div class="flex flex-wrap gap-5 text-xs">
               <div>
@@ -382,11 +446,11 @@
               </div>
               <div>
                 <span class="label block">Data quality</span>
-                <span id="res-data-quality" class="font-bold body-text">—</span>
+                <span id="res-data-quality" class="font-bold body-text" title="Share of records that passed every rule check in the scorer.">—</span>
               </div>
               <div>
                 <span class="label block">Model version</span>
-                <span id="res-model-version" class="font-bold body-text">—</span>
+                <span id="res-model-version" class="font-bold body-text" title="sha256 prefixes of the fault-classifier and anomaly-detector artifacts loaded for this run.">—</span>
               </div>
               <div class="flex items-end">
                 <a id="report-export-link" class="btn hidden" href="#" target="_blank" rel="noopener">
@@ -438,11 +502,13 @@
           </div>
         </div>
 
-        <div class="card card-pad">
-          <h3 class="font-bold mb-3" style="color:var(--vs-ink)">
+        <div class="card card-pad" id="diagnostics-card">
+          <h3 class="font-bold" style="color:var(--vs-ink)">
             Diagnostics and remediation (<span id="res-issues-count">0</span>)
           </h3>
-          <div id="res-issues-list" class="space-y-2 max-h-80 overflow-y-auto pr-1"></div>
+          <p class="label mt-1 mb-3" id="diagnostics-summary"></p>
+          <div id="res-issues-list" class="space-y-2"></div>
+          <button class="btn mt-3 hidden" id="diagnostics-toggle" onclick="toggleAllDiagnostics()" aria-expanded="false">Show all diagnostics</button>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -468,7 +534,11 @@
     <section id="view-mapping" class="tab-view hidden space-y-6" role="tabpanel" aria-labelledby="tab-btn-mapping">
       <div class="card card-pad">
         <h2 class="font-bold mb-1" style="color:var(--vs-ink)">Vendor mapping matrix</h2>
-        <p class="label mb-4">Documented adapter mapping from the canonical model to each supported vendor format — reference, not live output.</p>
+        <p class="label">Documented adapter mapping from the canonical model to each supported vendor format — reference, not live output.</p>
+        <p class="notice mb-4" role="note">
+          Read-only. Mappings are defined in the adapter code (<code>backend/adapters/</code>); editing
+          them from this interface is not implemented, and nothing here saves changes.
+        </p>
         <div class="overflow-x-auto">
           <table class="vs">
             <thead>
@@ -521,6 +591,11 @@
           </div>
         </div>
         <div id="compare-body" class="mt-5 text-sm body-text"><p class="muted">Pick two runs to compare.</p></div>
+        <p class="label mt-3">
+          Score deltas are the difference between the two stored run scores. The lists below show which
+          stored rule diagnostics differ by code and field; a delta with no matching changed check came
+          from record counts or checks that are not stored per issue.
+        </p>
       </div>
 
       <div class="card card-pad">

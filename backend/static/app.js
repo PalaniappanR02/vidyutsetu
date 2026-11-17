@@ -6,6 +6,10 @@
 let activeTab = 'overview';
 let currentVendors = {};
 let lastRun = null;
+let lastRunWasSample = false;
+let allIssues = [];
+let diagnosticsExpanded = false;
+const DEFAULT_VISIBLE_DIAGNOSTICS = 3;
 
 const STATUS_CLASS = {
   pass: 'pill pill-teal',
@@ -16,12 +20,32 @@ const STATUS_CLASS = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   applyStoredTheme();
+  applyGettingStartedPreference();
   if (window.lucide) lucide.createIcons();
   await loadVendors();
   await refreshDashboard();
   await loadMlHealth();
   await renderHeatmap();
+  handleEntryParams();
 });
+
+/** Deep links: /dashboard?sample=1 runs the synthetic sample straight away. */
+function handleEntryParams() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('sample') !== '1') return;
+  runSampleValidation();
+}
+
+function applyGettingStartedPreference() {
+  const card = document.getElementById('getting-started');
+  if (card && localStorage.getItem('vs-hide-getting-started') === '1') card.classList.add('hidden');
+}
+
+function dismissGettingStarted() {
+  localStorage.setItem('vs-hide-getting-started', '1');
+  const card = document.getElementById('getting-started');
+  if (card) card.classList.add('hidden');
+}
 
 /* ---------- helpers ---------- */
 
@@ -82,9 +106,11 @@ function switchTab(tabId) {
 async function loadVendors() {
   try {
     const res = await fetch('/api/vendors');
+    if (!res.ok) throw new Error(`/api/vendors returned ${res.status}`);
     currentVendors = await res.json();
   } catch (e) {
     console.error('Failed to load vendors', e);
+    currentVendors = {};
   }
 }
 
@@ -93,7 +119,7 @@ function renderVendorCards() {
   if (!container) return;
   const vendors = Object.values(currentVendors || {});
   if (!vendors.length) {
-    container.innerHTML = '<p class="muted text-sm">No adapters reported by /api/vendors.</p>';
+    container.innerHTML = `<p class="muted text-sm">No adapters reported by /api/vendors. <button class="btn mt-2" onclick="loadVendors().then(renderVendorCards)">Retry</button></p>`;
     return;
   }
   container.innerHTML = vendors.map(v => `
@@ -179,6 +205,17 @@ async function refreshDashboard() {
     `).join('');
   } catch (e) {
     console.error('Failed to refresh overview', e);
+    const tbody = document.getElementById('recent-runs-table-body');
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="notice">
+        Could not load dashboard statistics: ${esc(e.message)}.
+        <button class="btn mt-2" onclick="refreshDashboard(); loadMlHealth(); renderHeatmap();">Retry</button>
+      </div></td></tr>`;
+    }
+    ['stat-total-runs', 'stat-avg-score', 'stat-adapters'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerText = '—';
+    });
   }
 }
 
@@ -304,60 +341,179 @@ async function loadSamplePreset(vendorId) {
   document.getElementById('source-vendor-select').value = vendorId;
   try {
     const res = await fetch(`/api/generate?vendor_id=${vendorId}&meter_count=2&intervals=4`, { method: 'POST' });
+    if (!res.ok) throw new Error(`/api/generate returned ${res.status}`);
     const data = await res.json();
     document.getElementById('raw-payload-input').value =
       typeof data.payload === 'string' ? data.payload : JSON.stringify(data.payload, null, 2);
+    clearFormError();
+    return true;
   } catch (e) {
     console.error('Preset load error', e);
+    showFormError(`Could not generate a synthetic sample: ${e.message}. You can still paste a payload.`);
+    return false;
   }
 }
 
-async function runWorkbenchExecution() {
+/* ---------- form validation and progress ---------- */
+
+function showFormError(message) {
+  const el = document.getElementById('form-error');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove('hidden');
+}
+
+function clearFormError() {
+  const el = document.getElementById('form-error');
+  if (el) { el.textContent = ''; el.classList.add('hidden'); }
+}
+
+function setRunStatus(message) {
+  const el = document.getElementById('run-status');
+  if (!el) return;
+  el.textContent = message || '';
+  el.classList.toggle('hidden', !message);
+}
+
+/**
+ * Client-side checks only: enough to catch the obvious mistakes before a round trip.
+ * The server still performs the real parse, mapping and physical validation.
+ */
+function validateWorkbenchInput() {
+  const sourceVendor = document.getElementById('source-vendor-select').value;
+  const fileInput = document.getElementById('file-upload-input');
+  const raw = document.getElementById('raw-payload-input').value;
+
+  if (fileInput.files.length > 0) return { ok: true };
+  if (!raw.trim()) {
+    return {
+      ok: false,
+      message: 'No payload yet. Load a sample, generate synthetic data, paste JSON/CSV, or upload a file.',
+      focus: 'raw-payload-input',
+    };
+  }
+  const format = (currentVendors[sourceVendor] || {}).format_type;
+  if (format === 'json') {
+    try {
+      JSON.parse(raw);
+    } catch (e) {
+      return {
+        ok: false,
+        message: `This adapter expects JSON, and the payload does not parse: ${e.message}`,
+        focus: 'raw-payload-input',
+      };
+    }
+  }
+  if (format === 'csv' && !raw.split(/\r?\n/).slice(0, 3).join('\n').includes(',')) {
+    return {
+      ok: false,
+      message: 'This adapter expects CSV with a header row; no comma-separated row was found in the payload.',
+      focus: 'raw-payload-input',
+    };
+  }
+  return { ok: true };
+}
+
+function renderPendingStages() {
+  const body = document.getElementById('stages-body');
+  if (!body) return;
+  const names = ['Parse', 'Syntactic validation', 'Semantic mapping', 'Physical validation', 'ML screening'];
+  body.innerHTML = names.map(name => `
+    <div class="stage">
+      <div class="flex items-center justify-between gap-2">
+        <span class="stage-name">${esc(name)}</span>
+        <span class="pill">pending</span>
+      </div>
+      <p class="stage-meta mt-1">Waiting for the pipeline to reach this stage…</p>
+    </div>
+  `).join('');
+}
+
+async function runSampleValidation() {
+  switchTab('workbench');
+  const source = document.getElementById('source-vendor-select').value || 'alpha-hes';
+  const loaded = await loadSamplePreset(source);
+  if (!loaded) return;
+  await runWorkbenchExecution({ sample: true });
+}
+
+async function runWorkbenchExecution(options = {}) {
   const sourceVendor = document.getElementById('source-vendor-select').value;
   const targetVendor = document.getElementById('target-vendor-select').value;
   const rawPayload = document.getElementById('raw-payload-input').value;
   const fileInput = document.getElementById('file-upload-input');
+  const isSample = options.sample === true;
+
+  const check = validateWorkbenchInput();
+  if (!check.ok) {
+    showFormError(check.message);
+    const focusTarget = document.getElementById(check.focus);
+    if (focusTarget) focusTarget.focus();
+    return;
+  }
+  clearFormError();
 
   const formData = new FormData();
   formData.append('source_vendor', sourceVendor);
   formData.append('target_vendor', targetVendor);
-
   if (fileInput.files.length > 0) {
     formData.append('file', fileInput.files[0]);
-  } else if (rawPayload.trim()) {
-    formData.append('raw_payload', rawPayload);
   } else {
-    alert('Provide a payload or upload a file first.');
-    return;
+    formData.append('raw_payload', rawPayload);
   }
 
+  lastRunWasSample = isSample;
   const btn = document.getElementById('btn-run-workbench');
   btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
   btn.innerHTML = '<span>Running pipeline…</span>';
+  setRunStatus(`Validating ${sourceVendor}${targetVendor ? ' → ' + targetVendor : ''}. The five stages run in order; this normally takes a moment.`);
+
+  const container = document.getElementById('results-container');
+  container.classList.remove('hidden');
+  const verdictTitle = document.getElementById('verdict-title');
+  verdictTitle.innerText = 'Validation in progress';
+  document.getElementById('verdict-reason').innerText =
+    'Waiting for the pipeline result. Stage rows below are placeholders until each stage reports.';
+  document.getElementById('verdict-report-link').classList.add('hidden');
+  renderPendingStages();
 
   try {
     const res = await fetch('/api/workbench/execute', { method: 'POST', body: formData });
-    const result = await res.json();
-    btn.disabled = false;
-    btn.innerHTML = '<i data-lucide="play" class="w-4 h-4"></i><span>Run validation and transformation</span>';
-    if (window.lucide) lucide.createIcons();
+    const result = await res.json().catch(() => ({}));
 
-    if (res.status !== 200) {
-      alert('Execution failed: ' + (result.detail || 'Unknown error'));
+    if (!res.ok) {
+      verdictTitle.innerText = 'Validation could not run';
+      document.getElementById('verdict-reason').innerText =
+        `${result.detail || 'The service returned ' + res.status}. Nothing was scored; correct the input and run again.`;
+      setRunStatus('');
+      renderStages([]);
+      showFormError(result.detail || `The service returned ${res.status}.`);
       return;
     }
     lastRun = result;
+    setRunStatus('');
     displayExecutionResults(result);
   } catch (e) {
+    verdictTitle.innerText = 'Validation could not run';
+    document.getElementById('verdict-reason').innerText =
+      `Could not reach the validation service: ${e.message}. Check that the server is running, then run again.`;
+    setRunStatus('');
+    renderStages([]);
+    showFormError(`Network error: ${e.message}`);
+  } finally {
     btn.disabled = false;
-    btn.innerHTML = '<span>Run validation and transformation</span>';
-    alert('Error running test: ' + e.message);
+    btn.removeAttribute('aria-busy');
+    btn.innerHTML = '<i data-lucide="play" class="w-4 h-4"></i><span>Run validation and transformation</span>';
+    if (window.lucide) lucide.createIcons();
   }
 }
 
 function displayExecutionResults(res) {
   const container = document.getElementById('results-container');
   container.classList.remove('hidden');
+
+  renderVerdict(res);
 
   document.getElementById('res-run-id').innerText = res.run_id;
   document.getElementById('res-duration').innerText = res.duration_ms + ' ms';
@@ -445,29 +601,126 @@ function renderMlVerdict(res) {
   `).join('');
 }
 
+function issueCard(issue) {
+  const isError = issue.severity === 'ERROR';
+  return `
+    <div class="p-2.5 rounded-lg text-xs" style="border:1px solid ${isError ? 'var(--vs-red)' : 'var(--vs-amber)'};
+         background:${isError ? 'var(--vs-red-tint)' : 'var(--vs-amber-tint)'}">
+      <div class="flex items-center justify-between gap-2">
+        <span class="flex items-center gap-1.5">
+          <span class="tag tag-rule">rule</span>
+          <span class="font-bold" style="color:${isError ? 'var(--vs-red)' : 'var(--vs-amber-ink)'}">[${esc(issue.severity)}] ${esc(issue.code)}</span>
+        </span>
+        <span class="label code" style="border:0;background:transparent;padding:0">${esc(issue.field || 'envelope')}</span>
+      </div>
+      <p class="mt-1" style="color:var(--vs-ink)">${esc(issue.explanation || issue.message)}</p>
+      ${issue.suggested_fix ? `<p class="mt-1 muted">Suggested action: ${esc(issue.suggested_fix)}</p>` : ''}
+    </div>`;
+}
+
 function renderIssues(issues) {
+  allIssues = issues;
+  diagnosticsExpanded = false;
   const list = document.getElementById('res-issues-list');
+  const summary = document.getElementById('diagnostics-summary');
+  const toggle = document.getElementById('diagnostics-toggle');
   document.getElementById('res-issues-count').innerText = issues.length;
+
   if (!issues.length) {
     list.innerHTML = '<div class="notice notice-info">No rule violations detected for this payload.</div>';
+    if (summary) summary.innerText = 'Every configured rule check passed.';
+    if (toggle) { toggle.classList.add('hidden'); toggle.setAttribute('aria-expanded', 'false'); }
     return;
   }
-  list.innerHTML = issues.map(issue => {
-    const isError = issue.severity === 'ERROR';
-    return `
-      <div class="p-2.5 rounded-lg text-xs" style="border:1px solid ${isError ? 'var(--vs-red)' : 'var(--vs-amber)'};
-           background:${isError ? 'var(--vs-red-tint)' : 'var(--vs-amber-tint)'}">
-        <div class="flex items-center justify-between gap-2">
-          <span class="flex items-center gap-1.5">
-            <span class="tag tag-rule">rule</span>
-            <span class="font-bold" style="color:${isError ? 'var(--vs-red)' : 'var(--vs-amber-ink)'}">[${esc(issue.severity)}] ${esc(issue.code)}</span>
-          </span>
-          <span class="label code" style="border:0;background:transparent;padding:0">${esc(issue.field || 'envelope')}</span>
-        </div>
-        <p class="mt-1" style="color:var(--vs-ink)">${esc(issue.explanation || issue.message)}</p>
-        ${issue.suggested_fix ? `<p class="mt-1 muted">Suggested action: ${esc(issue.suggested_fix)}</p>` : ''}
-      </div>`;
-  }).join('');
+
+  const errors = issues.filter(i => i.severity === 'ERROR').length;
+  const warnings = issues.length - errors;
+  const first = issues.find(i => i.severity === 'ERROR') || issues[0];
+  if (summary) {
+    summary.innerText =
+      `${errors} error(s) · ${warnings} warning(s). Most important: [${first.severity}] ${first.code}` +
+      `${first.field ? ' on ' + first.field : ''}.`;
+  }
+
+  const visible = issues.slice(0, DEFAULT_VISIBLE_DIAGNOSTICS);
+  list.innerHTML = visible.map(issueCard).join('');
+  if (toggle) {
+    const hasMore = issues.length > DEFAULT_VISIBLE_DIAGNOSTICS;
+    toggle.classList.toggle('hidden', !hasMore);
+    toggle.innerText = hasMore ? `Show all ${issues.length} diagnostics` : '';
+    toggle.setAttribute('aria-expanded', 'false');
+  }
+}
+
+function toggleAllDiagnostics() {
+  const list = document.getElementById('res-issues-list');
+  const toggle = document.getElementById('diagnostics-toggle');
+  if (!list) return;
+  diagnosticsExpanded = !diagnosticsExpanded;
+  const issues = diagnosticsExpanded ? allIssues : allIssues.slice(0, DEFAULT_VISIBLE_DIAGNOSTICS);
+  list.innerHTML = issues.map(issueCard).join('');
+  if (toggle) {
+    toggle.innerText = diagnosticsExpanded ? 'Show fewer diagnostics' : `Show all ${allIssues.length} diagnostics`;
+    toggle.setAttribute('aria-expanded', String(diagnosticsExpanded));
+  }
+}
+
+function focusDiagnostics() {
+  if (!diagnosticsExpanded && allIssues.length > DEFAULT_VISIBLE_DIAGNOSTICS) toggleAllDiagnostics();
+  const card = document.getElementById('diagnostics-card');
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/** Overall outcome first, derived only from the returned issues, stages and score. */
+function renderVerdict(res) {
+  const issues = res.issues || [];
+  const errors = issues.filter(i => i.severity === 'ERROR');
+  const warnings = issues.filter(i => i.severity !== 'ERROR');
+  const mlFlags = res.ml_findings || [];
+  const score = Number(res.score && res.score.total_score);
+  const title = document.getElementById('verdict-title');
+  const reason = document.getElementById('verdict-reason');
+  const card = document.getElementById('result-verdict');
+  const sampleNote = document.getElementById('verdict-sample-note');
+  const reportLink = document.getElementById('verdict-report-link');
+  if (!title) return;
+
+  let label;
+  if (errors.length) {
+    label = 'Failed validation';
+    card.style.borderLeft = '4px solid var(--vs-red)';
+    title.style.color = 'var(--vs-red)';
+  } else if (warnings.length || mlFlags.length || (Number.isFinite(score) && score < 85)) {
+    label = 'Validated with warnings';
+    card.style.borderLeft = '4px solid var(--vs-amber)';
+    title.style.color = 'var(--vs-amber-ink)';
+  } else {
+    label = 'Passed validation';
+    card.style.borderLeft = '4px solid var(--vs-teal-deep)';
+    title.style.color = 'var(--vs-teal-deep)';
+  }
+  title.innerText = `${label} · score ${Number.isFinite(score) ? score : '—'}%`;
+
+  const parts = [];
+  if (errors.length) parts.push(`${errors.length} rule error(s)`);
+  if (warnings.length) parts.push(`${warnings.length} rule warning(s)`);
+  if (mlFlags.length) parts.push(`${mlFlags.length} ML flag(s) for review`);
+  const first = errors[0] || warnings[0];
+  const lead = first
+    ? ` First: [${first.severity}] ${first.code}${first.field ? ' on ' + first.field : ''} — ${first.explanation || first.message}`
+    : '';
+  const advice = errors.length
+    ? ' Fix the error(s) below and run again.'
+    : (warnings.length || mlFlags.length)
+      ? ' Check the renamed or flagged fields below; the payload is usable if those are expected.'
+      : ' No rule violations were recorded for this payload.';
+  reason.innerText = (parts.length ? parts.join(' · ') + '.' : 'No diagnostics were recorded.') + lead + advice;
+
+  if (sampleNote) sampleNote.hidden = !lastRunWasSample;
+  if (reportLink) {
+    reportLink.href = `/api/test-runs/${encodeURIComponent(res.run_id)}/report.html`;
+    reportLink.classList.remove('hidden');
+  }
 }
 
 async function runQuickDemo(source, target) {
@@ -505,7 +758,7 @@ async function runComparison() {
   const candidateId = document.getElementById('compare-candidate').value;
   const body = document.getElementById('compare-body');
   if (!baselineId || !candidateId) {
-    body.innerHTML = '<p class="muted">Two stored runs are required.</p>';
+    body.innerHTML = '<p class="muted">Two stored runs are required. Run validation in the Workbench first.</p>';
     return;
   }
   if (baselineId === candidateId) {
@@ -554,7 +807,14 @@ async function runComparison() {
                 }).join('')}</ul>`
               : '<p class="muted">None.</p>'}
           </div>`).join('')}
-      </div>`;
+      </div>
+      ${delta.total_score !== 0 && (data.resolved || []).length + (data.newly_introduced || []).length === 0
+        ? `<p class="notice mt-3" role="note">
+             The total score changed by ${esc(delta.total_score)} point(s), but no stored rule diagnostic
+             differs between these runs. The stored diagnostics cannot explain this delta — it can come
+             from record counts or from checks that are not persisted per issue.
+           </p>`
+        : ''}`;
     renderContractDiff(baselineId, candidateId, data);
   } catch (e) {
     body.innerHTML = `<div class="notice">Comparison failed: ${esc(e.message)}</div>`;
