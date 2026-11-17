@@ -3,7 +3,7 @@ Aligned with IEC 61968-9, DLMS/COSEM (IEC 62056), and IS 15959.
 """
 
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
@@ -92,7 +92,7 @@ class CanonicalControlCommand(BaseModel):
     command_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     meter_serial_number: str = Field(..., description="Target meter serial number")
     action: ControlAction = Field(..., description="Requested control action")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     parameter_value: Optional[float] = Field(default=None, description="Optional parameter e.g. kW limit")
     status: ControlStatus = Field(default=ControlStatus.PENDING)
     response_code: Optional[str] = None
@@ -104,7 +104,7 @@ class CanonicalPayload(BaseModel):
 
     message_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     source_system: str = Field(..., description="ID or name of origin system / HES")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     version: str = Field(default="1.0.0")
     readings: List[CanonicalMeterReading] = Field(default_factory=list)
     events: List[CanonicalMeterEvent] = Field(default_factory=list)
@@ -140,7 +140,7 @@ class CompatibilityScoreBreakdown(BaseModel):
 
 class TestExecutionReport(BaseModel):
     run_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    execution_time: datetime = Field(default_factory=datetime.utcnow)
+    execution_time: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     source_vendor: str
     target_vendor: Optional[str] = None
     total_records_processed: int = 0

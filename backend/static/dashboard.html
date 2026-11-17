@@ -145,6 +145,12 @@
         scrollbar-width: none; -ms-overflow-style: none;
       }
       nav[role="tablist"]::-webkit-scrollbar { display: none; }
+      nav[role="tablist"]::after {
+        content: "Swipe for more sections →"; position: sticky; right: 0; flex: 0 0 auto;
+        padding: .4rem .5rem; font-size: .67rem; color: #DFF1F4;
+        background: linear-gradient(90deg, transparent, var(--vs-navy) 25%);
+        pointer-events: none;
+      }
       header > div { padding-left: .85rem; padding-right: .85rem; }
       .card-pad { padding: 1rem 1.05rem; }
       #results-container, #view-workbench, #view-overview > .card, #diagnostics-card { scroll-margin-top: 8.5rem; }
@@ -153,6 +159,155 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important;
                                transition-duration: .01ms !important; scroll-behavior: auto !important; }
+    }
+
+    /* ================= presentation layer only: tokens, nav, badges, tables ================= */
+    :root {
+      --vs-radius: 8px;
+      --vs-radius-sm: 6px;
+      --vs-green: #147D4B;
+      --vs-green-tint: #E7F4EC;
+      --vs-green-line: #9FD3B5;
+      --vs-zebra: #F7FAFD;
+      --vs-gray: #475569;
+      --vs-muted: #475569;
+      --vs-shadow-card: 0 1px 2px rgba(11, 37, 69, .06), 0 1px 3px rgba(11, 37, 69, .04);
+      --vs-space-1: 4px; --vs-space-2: 8px; --vs-space-3: 12px; --vs-space-4: 16px;
+      --vs-space-5: 24px; --vs-space-6: 32px; --vs-space-7: 48px;
+      --vs-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    [data-theme="dark"] {
+      --vs-green: #6FD39B;
+      --vs-green-tint: #103A28;
+      --vs-green-line: #2E7A55;
+      --vs-zebra: #0A2340;
+      --vs-gray: #A8BECC;
+      --vs-muted: #A8BECC;
+      --vs-shadow-card: 0 1px 2px rgba(0, 0, 0, .45);
+    }
+
+    body { font-size: 14px; }
+    main#main { max-width: 1200px; }
+    .card { border-radius: var(--vs-radius); box-shadow: var(--vs-shadow-card); }
+    .card-pad { padding: var(--vs-space-5); }
+    .label { font-size: 12px; color: var(--vs-muted); }
+    .helper { font-size: 12px; color: var(--vs-muted); margin: 0; }
+    .mono { font-family: var(--vs-mono); font-size: .95em; }
+
+    table.vs { font-size: 13px; }
+    table.vs th {
+      font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+      position: sticky; top: 0; background: var(--vs-surface); z-index: 2;
+    }
+    table.vs tbody tr:nth-child(even) { background: var(--vs-zebra); }
+    table.vs tbody tr:hover { background: var(--vs-surface-alt); }
+    .table-scroll { max-height: 30rem; overflow: auto; }
+    .table-scroll thead th { z-index: 3; }
+    .sticky-col { position: sticky; left: 0; background: var(--vs-surface); z-index: 1; }
+    tbody tr:nth-child(even) .sticky-col { background: var(--vs-zebra); }
+
+    .grade { display: inline-flex; align-items: center; justify-content: center; min-width: 2.15rem;
+             padding: .12rem .5rem; border-radius: 999px; font-size: 11px; font-weight: 700;
+             border: 1px solid transparent; letter-spacing: .02em; }
+    .grade-a-plus { background: var(--vs-green); border-color: var(--vs-green); color: #fff; }
+    .grade-a { background: var(--vs-green-tint); border-color: var(--vs-green-line); color: var(--vs-green); }
+    .grade-b { background: var(--vs-amber-tint); border-color: var(--vs-amber); color: var(--vs-amber-ink); }
+    .grade-c { background: var(--vs-red-tint); border-color: var(--vs-red); color: var(--vs-red); }
+    [data-theme="dark"] .grade-a-plus { color: #06231A; }
+
+    .score-cell { display: flex; flex-direction: column; gap: 4px; min-width: 66px; }
+    .score-val { font-weight: 700; font-size: 13px; }
+    .score-good { color: var(--vs-green); }
+    .score-mid { color: var(--vs-amber-ink); }
+    .score-bad { color: var(--vs-red); }
+    .score-bar { height: 4px; border-radius: 999px; background: var(--vs-surface-alt); overflow: hidden; }
+    .score-bar > span { display: block; height: 100%; background: currentColor; }
+
+    .empty-state { display: flex; align-items: center; gap: var(--vs-space-2); padding: var(--vs-space-4);
+                   border: 1px dashed var(--vs-line-strong); border-radius: var(--vs-radius);
+                   color: var(--vs-muted); font-size: 13px; }
+
+    .badge-advisory { background: transparent; border: 1px dashed var(--vs-amber); color: var(--vs-amber-ink);
+                      border-radius: 999px; font-size: 11px; font-weight: 700; padding: .15rem .5rem; }
+
+    /* orange = the single primary action on a screen; teal = secondary/navigation */
+    .btn { border-radius: var(--vs-radius-sm); }
+    .btn-primary { background: var(--vs-amber); border-color: var(--vs-amber); color: #3B2600; }
+    .btn-primary:hover { background: #DD8C05; }
+    .btn-cta { background: var(--vs-teal-deep); border-color: var(--vs-teal-deep); color: #fff; }
+    .btn-cta:hover { background: #096B75; }
+
+    /* header: grouped sections + one utility area, no stuck highlight */
+    header a, header button { -webkit-tap-highlight-color: transparent; }
+    .vs-nav { display: flex; align-items: center; gap: var(--vs-space-4); flex-wrap: wrap; }
+    .vs-nav-group { display: flex; align-items: center; gap: var(--vs-space-1); }
+    .vs-nav-label { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: #8FB0C8; margin-right: 2px; }
+    .nav-tabs { display: flex; align-items: center; gap: 2px; }
+    .nav-tab { color: #CFE0EE; border-radius: var(--vs-radius-sm); padding: .35rem .6rem; font-size: 12.5px; }
+    .nav-tab:hover { background: rgba(255,255,255,.1); color: #fff; }
+    .nav-tab[aria-selected="true"] { background: var(--vs-teal-deep); color: #fff;
+                                     box-shadow: inset 0 -2px 0 rgba(255,255,255,.4); }
+    a.nav-tab, a.nav-tab:visited { color: #CFE0EE; text-decoration: none; }
+    a.nav-tab:hover { color: #fff; }
+    .nav-tab:focus-visible, a.nav-tab:focus-visible { outline: 2px solid #7FE3EC; outline-offset: 2px; }
+    .vs-utility { display: flex; align-items: center; gap: var(--vs-space-2); margin-left: auto; }
+    .vs-utility .pill { font-size: 11px; }
+
+    /* workbench / roundtrip flow illustrations */
+    .vs-flow { display: flex; align-items: center; gap: var(--vs-space-2); flex-wrap: wrap;
+               font-size: 12px; color: var(--vs-muted); margin-bottom: var(--vs-space-4); }
+    .vs-flow .step { padding: .2rem .55rem; border: 1px solid var(--vs-line); border-radius: 999px;
+                     background: var(--vs-surface-alt); color: var(--vs-body); }
+    .vs-arrow { color: var(--vs-teal-deep); font-weight: 700; }
+    .sample-group { display: flex; align-items: center; gap: var(--vs-space-1); flex-wrap: wrap; }
+    .roundtrip-flow { display: flex; align-items: center; gap: var(--vs-space-2); flex-wrap: wrap; margin: 0; }
+    .roundtrip-flow .node { border: 1px solid var(--vs-line); border-radius: var(--vs-radius); padding: .45rem .7rem;
+                            background: var(--vs-surface-alt); font-size: 12px; font-weight: 600; color: var(--vs-ink); }
+    .vendor-grid { gap: var(--vs-space-4); }
+    .vendor-card { cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease; }
+    .vendor-card:hover { border-color: var(--vs-teal); box-shadow: 0 2px 8px rgba(11,124,135,.14); }
+    .vendor-card:focus-visible { outline: 3px solid var(--vs-teal); outline-offset: 2px; }
+    .vendor-avatar { width: 40px; height: 40px; border-radius: 999px; display: grid; place-items: center;
+                     font-weight: 700; font-size: 14px; background: var(--vs-teal-tint); color: var(--vs-teal-deep);
+                     border: 1px solid var(--vs-teal); }
+    .legend { display: flex; align-items: center; gap: var(--vs-space-2); font-size: 11px;
+              color: var(--vs-muted); margin-top: var(--vs-space-2); flex-wrap: wrap; }
+    .legend .swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--vs-line); display: inline-block; }
+    .heat-axis { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--vs-muted); white-space: nowrap; }
+    /* mapping: sticky first column, monospace for units and OBIS codes */
+    .mapping-table td:first-child, .mapping-table th:first-child {
+      position: sticky; left: 0; background: var(--vs-surface); z-index: 1;
+    }
+    .mapping-table tbody tr:nth-child(even) td:first-child { background: var(--vs-zebra); }
+    .mapping-table tbody td:not(:first-child) { font-family: var(--vs-mono); font-size: 12px; }
+    .mapping-table tbody td:first-child { font-family: var(--vs-mono); font-size: 12px; font-weight: 700; }
+
+    @media (max-width: 1100px) {
+      .vs-nav { gap: var(--vs-space-2); }
+      .vs-nav-label { display: none; }
+      .vs-utility { margin-left: 0; }
+    }
+    @media (max-width: 768px) {
+      .vs-nav { width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; position: relative; }
+      .vs-nav::-webkit-scrollbar { display: none; }
+      .vs-nav { padding-right: 3.25rem; }
+      .vs-nav::after {
+        content: "more →"; position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+        padding: .3rem .4rem .3rem .9rem; font-size: 10px; color: #DFF1F4;
+        background: linear-gradient(90deg, transparent, var(--vs-navy) 40%); pointer-events: none;
+      }
+      .vs-nav-label { display: none; }
+      .vs-utility { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+      .vs-flow { font-size: 11px; }
+      #results-container, #view-workbench, #view-overview > .card, #diagnostics-card { scroll-margin-top: 10.5rem; }
+    }
+    @media (max-width: 480px) {
+      header > div { padding-top: .5rem; padding-bottom: .5rem; }
+      .brand-tagline { display: none; }
+      .nav-tab { padding: .3rem .45rem; font-size: 12px; }
+      .vs-utility { gap: 6px; }
+      .vs-utility .pill { font-size: 10px; padding: .12rem .4rem; }
+      .card-pad { padding: .9rem .95rem; }
     }
   </style>
 </head>
@@ -168,25 +323,42 @@
         </span>
         <div>
           <p class="text-white font-bold text-lg leading-tight">vidyut<span style="color:#7FE3EC">setu</span></p>
-          <p class="text-xs" style="color:#A9C4D8">AMI interoperability and conformance workbench</p>
+          <p class="text-xs brand-tagline" style="color:#A9C4D8">AMI interoperability and conformance workbench</p>
         </div>
       </div>
 
-      <nav class="flex items-center gap-1 flex-wrap" role="tablist" aria-label="Workbench sections">
-        <button role="tab" aria-selected="true" id="tab-btn-overview" class="nav-tab" onclick="switchTab('overview')">Overview</button>
-        <button role="tab" aria-selected="false" id="tab-btn-workbench" class="nav-tab" onclick="switchTab('workbench')">Workbench</button>
-        <button role="tab" aria-selected="false" id="tab-btn-mapping" class="nav-tab" onclick="switchTab('mapping')">Mapping</button>
-        <button role="tab" aria-selected="false" id="tab-btn-compare" class="nav-tab" onclick="switchTab('compare')">Compare</button>
-        <button role="tab" aria-selected="false" id="tab-btn-roundtrip" class="nav-tab" onclick="switchTab('roundtrip')">Roundtrip</button>
-        <button role="tab" aria-selected="false" id="tab-btn-suites" class="nav-tab" onclick="switchTab('suites')">Suites</button>
-        <button role="tab" aria-selected="false" id="tab-btn-vendors" class="nav-tab" onclick="switchTab('vendors')">Vendors</button>
-        <button role="tab" aria-selected="false" id="tab-btn-history" class="nav-tab" onclick="switchTab('history')">History</button>
-        <button role="tab" aria-selected="false" id="tab-btn-standards" class="nav-tab" onclick="switchTab('standards')">Standards</button>
+      <nav class="vs-nav" aria-label="Workbench sections">
+        <div class="vs-nav-group">
+          <span class="vs-nav-label" aria-hidden="true">Test</span>
+          <div class="nav-tabs" role="tablist" aria-label="Test sections">
+            <button role="tab" aria-selected="false" id="tab-btn-workbench" class="nav-tab" onclick="switchTab('workbench')">Workbench</button>
+            <button role="tab" aria-selected="false" id="tab-btn-compare" class="nav-tab" onclick="switchTab('compare')">Compare</button>
+            <button role="tab" aria-selected="false" id="tab-btn-roundtrip" class="nav-tab" onclick="switchTab('roundtrip')">Roundtrip</button>
+            <button role="tab" aria-selected="false" id="tab-btn-suites" class="nav-tab" onclick="switchTab('suites')">Suites</button>
+          </div>
+        </div>
+
+        <div class="vs-nav-group">
+          <span class="vs-nav-label" aria-hidden="true">Reference</span>
+          <div class="nav-tabs" role="tablist" aria-label="Reference sections">
+            <button role="tab" aria-selected="false" id="tab-btn-mapping" class="nav-tab" onclick="switchTab('mapping')">Mapping</button>
+            <button role="tab" aria-selected="false" id="tab-btn-vendors" class="nav-tab" onclick="switchTab('vendors')">Vendors</button>
+            <button role="tab" aria-selected="false" id="tab-btn-standards" class="nav-tab" onclick="switchTab('standards')">Standards</button>
+          </div>
+        </div>
+
+        <div class="vs-nav-group">
+          <span class="vs-nav-label" aria-hidden="true">Results</span>
+          <div class="nav-tabs" role="tablist" aria-label="Results sections">
+            <button role="tab" aria-selected="true" id="tab-btn-overview" class="nav-tab" onclick="switchTab('overview')">Overview</button>
+            <button role="tab" aria-selected="false" id="tab-btn-history" class="nav-tab" onclick="switchTab('history')">History</button>
+          </div>
+        </div>
       </nav>
 
-      <div class="flex items-center gap-2">
+      <div class="vs-utility">
         <span class="pill" id="standards-badge" style="background:rgba(255,255,255,.12);color:#DFF1F4;border-color:rgba(255,255,255,.25)">
-          <span style="width:7px;height:7px;border-radius:999px;background:#19C2D0;display:inline-block"></span>
+          <span style="width:7px;height:7px;border-radius:999px;background:#19C2D0;display:inline-block" aria-hidden="true"></span>
           IEC 61968-9 aligned
         </span>
         <a href="/" class="nav-tab">Landing page</a>
@@ -243,7 +415,7 @@
           <p class="label">ML fault screening</p>
           <p class="stat-value" id="ml-headline-accuracy">0%</p>
           <p class="stat-hint">
-            <span class="pill pill-amber" id="ml-synthetic-badge">Trained on synthetic data</span>
+            <span class="pill badge-advisory" id="ml-synthetic-badge">Trained on synthetic data</span>
           </p>
         </div>
       </div>
@@ -282,7 +454,7 @@
             <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i><span>Refresh</span>
           </button>
         </div>
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto table-scroll">
           <table class="vs">
             <thead>
               <tr>
@@ -301,19 +473,28 @@
     <!-- WORKBENCH -->
     <section id="view-workbench" class="tab-view hidden space-y-6" role="tabpanel" aria-labelledby="tab-btn-workbench">
       <div class="card card-pad">
-        <div class="flex flex-wrap items-start justify-between gap-3 mb-5">
+        <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
           <div>
             <h2 class="font-bold" style="color:var(--vs-ink)">AMI interoperability test configuration</h2>
             <p class="label">Choose vendor formats, paste a payload or generate synthetic telemetry, then run the five-stage pipeline.</p>
           </div>
-          <div class="flex flex-wrap gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <button class="btn btn-cta" onclick="runSampleValidation()">Try sample validation</button>
-            <button class="btn" onclick="loadSamplePreset('alpha-hes')">Alpha sample</button>
-            <button class="btn" onclick="loadSamplePreset('beta-hes')">Beta sample</button>
-            <button class="btn" onclick="loadSamplePreset('gamma-mdms')">Gamma sample</button>
-            <button class="btn" onclick="loadSamplePreset('delta-legacy')">Delta sample</button>
+            <div class="sample-group">
+              <span class="label">Load sample:</span>
+              <button class="btn" onclick="loadSamplePreset('alpha-hes')">Alpha sample</button>
+              <button class="btn" onclick="loadSamplePreset('beta-hes')">Beta sample</button>
+              <button class="btn" onclick="loadSamplePreset('gamma-mdms')">Gamma sample</button>
+              <button class="btn" onclick="loadSamplePreset('delta-legacy')">Delta sample</button>
+            </div>
           </div>
         </div>
+
+        <p class="vs-flow" aria-hidden="true">
+          <span class="step">Source system</span><span class="vs-arrow">→</span>
+          <span class="step">Canonical model</span><span class="vs-arrow">→</span>
+          <span class="step">Target system</span>
+        </p>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div class="space-y-4">
@@ -357,14 +538,23 @@
                 <label class="label" for="raw-payload-input">Raw payload</label>
                 <span class="label">JSON or CSV</span>
               </div>
-              <textarea id="raw-payload-input" rows="12" class="code mt-1" placeholder="Paste a raw vendor payload, or generate one above."></textarea>
+              <textarea id="raw-payload-input" rows="12" class="code mt-1" placeholder="Paste a vendor payload, e.g. { &quot;system_id&quot;: &quot;alpha-hes&quot;, &quot;meter_data&quot;: [ … ] } — or load a sample above."></textarea>
+            </div>
+
+            <div>
+              <p id="form-error" class="text-xs mb-2 hidden" role="alert" style="color:var(--vs-red)"></p>
+              <button id="btn-run-workbench" class="btn btn-primary w-full py-3" onclick="runWorkbenchExecution()">
+                <i data-lucide="play" class="w-4 h-4"></i>
+                <span>Run validation and transformation</span>
+              </button>
+              <p id="run-status" class="text-xs mt-2 hidden" role="status" aria-live="polite" style="color:var(--vs-body)"></p>
             </div>
           </div>
 
           <div class="space-y-4 flex flex-col justify-between">
             <div class="space-y-4">
               <div>
-                <label class="label" for="target-vendor-select">Target destination system</label>
+                <label class="label" for="target-vendor-select"><span class="vs-arrow" aria-hidden="true">→</span> Target destination system</label>
                 <select id="target-vendor-select" class="select mt-1">
                   <option value="gamma-mdms">Gamma MDMS — CIM IEC 61968-9 (JSON)</option>
                   <option value="alpha-hes">Alpha HES — DLMS/COSEM OBIS IS 15959 (JSON)</option>
@@ -389,15 +579,6 @@
                   <li>ML fault screening (advisory, synthetic-trained)</li>
                 </ul>
               </div>
-            </div>
-
-            <div>
-              <p id="form-error" class="text-xs mb-2 hidden" role="alert" style="color:var(--vs-red)"></p>
-              <button id="btn-run-workbench" class="btn btn-primary w-full py-3" onclick="runWorkbenchExecution()">
-                <i data-lucide="play" class="w-4 h-4"></i>
-                <span>Run validation and transformation</span>
-              </button>
-              <p id="run-status" class="text-xs mt-2 hidden" role="status" aria-live="polite" style="color:var(--vs-body)"></p>
             </div>
           </div>
         </div>
@@ -495,7 +676,7 @@
           <div class="card card-pad">
             <div class="flex items-center justify-between mb-1">
               <h3 class="font-bold" style="color:var(--vs-ink)">ML verdict</h3>
-              <span class="pill pill-amber" id="ml-verdict-badge">Trained on synthetic data</span>
+              <span class="pill badge-advisory" id="ml-verdict-badge">Trained on synthetic data</span>
             </div>
             <p class="label mb-3">Advisory screen. Rule findings below remain authoritative.</p>
             <div id="ml-verdict-body" class="space-y-2 text-xs"></div>
@@ -535,12 +716,13 @@
       <div class="card card-pad">
         <h2 class="font-bold mb-1" style="color:var(--vs-ink)">Vendor mapping matrix</h2>
         <p class="label">Documented adapter mapping from the canonical model to each supported vendor format — reference, not live output.</p>
-        <p class="notice mb-4" role="note">
-          Read-only. Mappings are defined in the adapter code (<code>backend/adapters/</code>); editing
-          them from this interface is not implemented, and nothing here saves changes.
+        <p class="notice mb-4 flex items-start gap-2" role="note">
+          <i data-lucide="info" class="w-4 h-4 shrink-0" aria-hidden="true"></i>
+          <span>Read-only. Mappings are defined in the adapter code (<code>backend/adapters/</code>); editing
+            them from this interface is not implemented, and nothing here saves changes.</span>
         </p>
-        <div class="overflow-x-auto">
-          <table class="vs">
+        <div class="overflow-x-auto table-scroll">
+          <table class="vs mapping-table">
             <thead>
               <tr>
                 <th>Canonical attribute</th><th>Standard / unit</th>
@@ -562,7 +744,7 @@
       <div class="card card-pad">
         <h2 class="font-bold mb-1" style="color:var(--vs-ink)">Registered adapters</h2>
         <p class="label mb-4">Direction support reported by the running adapter registry (<code>GET /api/vendors</code>).</p>
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto table-scroll">
           <table class="vs">
             <thead><tr><th>Vendor</th><th>System</th><th>Format</th><th>Protocol</th><th>OBIS mappings</th><th>Event mappings</th></tr></thead>
             <tbody id="mapping-matrix-body"><tr><td colspan="6" class="muted">Loading adapters…</td></tr></tbody>
@@ -590,7 +772,12 @@
             <button class="btn" onclick="loadRunOptions()">Reload runs</button>
           </div>
         </div>
-        <div id="compare-body" class="mt-5 text-sm body-text"><p class="muted">Pick two runs to compare.</p></div>
+        <div id="compare-body" class="mt-5 text-sm body-text">
+          <div class="empty-state">
+            <i data-lucide="git-compare" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Pick a baseline and a candidate run, then choose Compare runs.</span>
+          </div>
+        </div>
         <p class="label mt-3">
           Score deltas are the difference between the two stored run scores. The lists below show which
           stored rule diagnostics differ by code and field; a delta with no matching changed check came
@@ -611,7 +798,16 @@
     <section id="view-roundtrip" class="tab-view hidden space-y-6" role="tabpanel" aria-labelledby="tab-btn-roundtrip">
       <div class="card card-pad">
         <h2 class="font-bold mb-1" style="color:var(--vs-ink)">Round-trip transformation</h2>
-        <p class="label mb-4">A → canonical → B → canonical, with a field-level diff of what survived the round trip.</p>
+        <p class="label mb-3">A → canonical → B → canonical, with a field-level diff of what survived the round trip.</p>
+        <div class="roundtrip-flow mb-4" aria-hidden="true">
+          <span class="node">Vendor A payload</span>
+          <span class="vs-arrow">→</span>
+          <span class="node">Canonical model</span>
+          <span class="vs-arrow">→</span>
+          <span class="node">Vendor B payload</span>
+          <span class="vs-arrow">→</span>
+          <span class="node">Canonical again</span>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label class="label" for="rt-vendor-a">Vendor A (source)</label>
@@ -640,7 +836,12 @@
           <label class="label" for="rt-payload">Vendor A payload</label>
           <textarea id="rt-payload" rows="10" class="code mt-1" placeholder="Load a sample payload for vendor A, or paste one."></textarea>
         </div>
-        <div id="rt-body" class="mt-5 text-sm body-text"><p class="muted">Run a round trip to see the field-level diff.</p></div>
+        <div id="rt-body" class="mt-5 text-sm body-text">
+          <div class="empty-state">
+            <i data-lucide="repeat" class="w-4 h-4" aria-hidden="true"></i>
+            <span>No round trip yet. Load a sample payload and run it to see which canonical fields survive the trip through vendor B.</span>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -654,7 +855,7 @@
           </div>
           <button class="btn" onclick="loadSuites()">Reload</button>
         </div>
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto table-scroll">
           <table class="vs">
             <thead><tr><th>Suite</th><th>Scenarios</th><th>Created</th><th>Action</th></tr></thead>
             <tbody id="suites-body"><tr><td colspan="4" class="muted">Loading suites…</td></tr></tbody>
@@ -666,7 +867,7 @@
 
     <!-- VENDORS -->
     <section id="view-vendors" class="tab-view hidden space-y-6" role="tabpanel" aria-labelledby="tab-btn-vendors">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="vendor-cards-grid"></div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 vendor-grid" id="vendor-cards-grid"></div>
     </section>
 
     <!-- HISTORY -->
@@ -676,7 +877,7 @@
           <h2 class="font-bold" style="color:var(--vs-ink)">Run history</h2>
           <button class="btn" onclick="loadHistoryRuns()">Reload</button>
         </div>
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto table-scroll">
           <table class="vs">
             <thead>
               <tr><th>Run</th><th>Executed</th><th>Source</th><th>Target</th><th>Valid / total</th><th>Score</th><th>Grade</th><th>Actions</th></tr>

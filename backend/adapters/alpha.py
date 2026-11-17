@@ -113,9 +113,13 @@ class AlphaAdapter(BaseAdapter):
                 continue
 
             # Parse timestamp
-            ts_raw = item.get("clock") or item.get("timestamp")
+            ts_raw = (
+                item["clock"]
+                if item.get("clock") is not None
+                else item.get("timestamp")
+            )
             reading_time = None
-            if ts_raw:
+            if ts_raw is not None:
                 try:
                     if isinstance(ts_raw, str):
                         reading_time = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
@@ -125,13 +129,21 @@ class AlphaAdapter(BaseAdapter):
                     issues.append(DiagnosticIssue(
                         code="INVALID_TIMESTAMP_FORMAT",
                         field=f"meter_data[{idx}].clock",
-                        severity=IssueSeverity.WARNING,
-                        message=f"Could not parse clock timestamp '{ts_raw}', using current UTC time",
+                        severity=IssueSeverity.ERROR,
+                        message=f"Could not parse source clock timestamp '{ts_raw}'",
                         observed_value=ts_raw,
-                        suggested_fix="Format timestamp as ISO-8601 UTC (e.g. 2026-03-31T10:00:00Z)"
+                        suggested_fix="Format timestamp as ISO-8601 UTC (e.g. 2026-03-31T10:00:00Z)",
                     ))
             if not reading_time:
-                reading_time = datetime.now(timezone.utc)
+                issues.append(DiagnosticIssue(
+                    code="INVALID_TIMESTAMP_FORMAT",
+                    field=f"meter_data[{idx}].clock",
+                    severity=IssueSeverity.ERROR,
+                    message="A valid source timestamp is required; the record was rejected.",
+                    observed_value=ts_raw,
+                    suggested_fix="Supply an ISO-8601 timestamp with an explicit UTC offset.",
+                ))
+                continue
 
             # Parse OBIS registers
             registers = item.get("registers", {})

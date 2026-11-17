@@ -115,12 +115,12 @@ class BetaAdapter(BaseAdapter):
                 issues.append(DiagnosticIssue(
                     code="INVALID_CSV_TIMESTAMP",
                     field=f"Row {row_idx}: RDG_TIME",
-                    severity=IssueSeverity.WARNING,
+                    severity=IssueSeverity.ERROR,
                     message=f"Could not parse timestamp '{time_str}', expected DD-MM-YYYY HH:mm:ss",
                     observed_value=time_str,
                     suggested_fix="Format as DD-MM-YYYY HH:mm:ss or ISO 8601"
                 ))
-                parsed_time = datetime.now(timezone.utc)
+                continue
 
             # Parse energy and electrical registers
             def parse_float_safe(key: str, default: float = 0.0) -> float:

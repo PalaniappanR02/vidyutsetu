@@ -112,7 +112,15 @@ class DeltaAdapter(BaseAdapter):
                 except Exception:
                     pass
             if not dt:
-                dt = datetime.now(timezone.utc)
+                issues.append(DiagnosticIssue(
+                    code="INVALID_TIMESTAMP_FORMAT",
+                    field=f"telemetry[{idx}].timestamp",
+                    severity=IssueSeverity.ERROR,
+                    message=f"Could not parse Delta timestamp '{ts_raw}'",
+                    observed_value=ts_raw,
+                    suggested_fix="Provide an ISO 8601 timestamp or Unix epoch seconds."
+                ))
+                continue
 
             # Energy conversion from Wh -> kWh (0.001)
             raw_wh = rec.get("act_wh")
@@ -127,6 +135,13 @@ class DeltaAdapter(BaseAdapter):
 
             act_kwh = float(raw_wh) * 0.001
             exp_kwh = float(rec.get("exp_wh", 0.0)) * 0.001
+
+            # Reactive energy in Varh -> kVArh (optional, preserved across roundtrips)
+            raw_varh = rec.get("react_varh")
+            if raw_varh is None:
+                react_kvarh = 0.0
+            else:
+                react_kvarh = float(raw_varh) * 0.001
 
             # Voltage in mV -> V
             raw_mv = rec.get("volt_mv")
@@ -146,6 +161,7 @@ class DeltaAdapter(BaseAdapter):
                 interval_minutes=15,
                 active_energy_import_kwh=round(act_kwh, 4),
                 active_energy_export_kwh=round(exp_kwh, 4),
+                reactive_energy_kvarh=round(react_kvarh, 4),
                 voltage_v=round(volt_v, 2) if volt_v is not None else None,
                 current_a=round(curr_a, 3) if curr_a is not None else None,
                 power_factor=round(pf, 3) if pf is not None else None,
@@ -186,6 +202,7 @@ class DeltaAdapter(BaseAdapter):
                 "ts_epoch_sec": int(r.timestamp.timestamp()),
                 "act_wh": round(r.active_energy_import_kwh * 1000.0, 1),
                 "exp_wh": round((r.active_energy_export_kwh or 0.0) * 1000.0, 1),
+                "react_varh": round((r.reactive_energy_kvarh or 0.0) * 1000.0, 1),
                 "freq_hz": r.frequency_hz or 50.0
             }
             if r.voltage_v is not None:

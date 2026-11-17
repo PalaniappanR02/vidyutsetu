@@ -112,12 +112,12 @@ class GammaAdapter(BaseAdapter):
 
                     # Determine metric from readingType
                     rt_str = str(reading_type).lower()
-                    if "import" in rt_str or "active" in rt_str or "kwh" in rt_str:
-                        readings_map[key]["active_energy_import_kwh"] = float(val)
-                    elif "export" in rt_str:
+                    if "export" in rt_str:
                         readings_map[key]["active_energy_export_kwh"] = float(val)
                     elif "reactive" in rt_str or "kvarh" in rt_str:
                         readings_map[key]["reactive_energy_kvarh"] = float(val)
+                    elif "import" in rt_str or "active" in rt_str or "kwh" in rt_str:
+                        readings_map[key]["active_energy_import_kwh"] = float(val)
                     elif "voltage" in rt_str or "volt" in rt_str or rt_str.endswith(".v"):
                         readings_map[key]["voltage_v"] = float(val)
                     elif "current" in rt_str or "amp" in rt_str or rt_str.endswith(".a"):
@@ -157,16 +157,20 @@ class GammaAdapter(BaseAdapter):
         # Build CanonicalMeterReading items
         readings: List[CanonicalMeterReading] = []
         for (meter_id, ts_str), data_dict in readings_map.items():
-            parsed_ts = datetime.now(timezone.utc)
+            parsed_ts = None
             if ts_str:
                 try:
                     parsed_ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
                 except Exception:
                     issues.append(DiagnosticIssue(
                         code="INVALID_CIM_TIMESTAMP",
-                        severity=IssueSeverity.WARNING,
-                        message=f"Could not parse CIM timestamp '{ts_str}'"
+                        field=f"Meter {meter_id}: timeStamp",
+                        severity=IssueSeverity.ERROR,
+                        message=f"Could not parse CIM timestamp '{ts_str}'",
+                        observed_value=ts_str,
+                        suggested_fix="Provide an ISO 8601 UTC timestamp such as '2026-01-01T00:00:00Z'."
                     ))
+                    continue
 
             act_imp = data_dict["active_energy_import_kwh"]
             if act_imp is None:
@@ -207,6 +211,8 @@ class GammaAdapter(BaseAdapter):
         meter_readings_payload = []
         for meter_id, readings_list in meter_map.items():
             import_blocks = []
+            export_blocks = []
+            reactive_blocks = []
             voltage_blocks = []
             current_blocks = []
 
@@ -216,6 +222,16 @@ class GammaAdapter(BaseAdapter):
                     "timeStamp": ts_iso,
                     "value": round(r.active_energy_import_kwh, 4),
                     "ReadingQualities": [{"quality": r.quality_code.value}]
+                })
+                export_blocks.append({
+                    "timeStamp": ts_iso,
+                    "value": round(r.active_energy_export_kwh or 0.0, 4),
+                    "ReadingQualities": [{"quality": r.quality_code.value}],
+                })
+                reactive_blocks.append({
+                    "timeStamp": ts_iso,
+                    "value": round(r.reactive_energy_kvarh or 0.0, 4),
+                    "ReadingQualities": [{"quality": r.quality_code.value}],
                 })
                 if r.voltage_v is not None:
                     voltage_blocks.append({
@@ -233,6 +249,12 @@ class GammaAdapter(BaseAdapter):
             blocks = [{
                 "readingType": "IEC61968-9.ActiveEnergy.Import.kWh",
                 "IntervalReadings": import_blocks
+            }, {
+                "readingType": "IEC61968-9.ActiveEnergy.Export.kWh",
+                "IntervalReadings": export_blocks,
+            }, {
+                "readingType": "IEC61968-9.ReactiveEnergy.kVArh",
+                "IntervalReadings": reactive_blocks,
             }]
             if voltage_blocks:
                 blocks.append({
@@ -244,6 +266,19 @@ class GammaAdapter(BaseAdapter):
                     "readingType": "IEC61968-9.Current.RMS.A",
                     "IntervalReadings": current_blocks
                 })
+            # Power factor + frequency blocks (preserve these fields across roundtrips)
+            pf_blocks = []
+            freq_blocks = []
+            for r in readings_list:
+                ts_iso = r.timestamp.isoformat()
+                if r.power_factor is not None:
+                    pf_blocks.append({"timeStamp": ts_iso, "value": round(r.power_factor, 3), "ReadingQualities": [{"quality": "VALID"}]})
+                if r.frequency_hz is not None:
+                    freq_blocks.append({"timeStamp": ts_iso, "value": round(r.frequency_hz, 2), "ReadingQualities": [{"quality": "VALID"}]})
+            if pf_blocks:
+                blocks.append({"readingType": "IEC61968-9.PowerFactor", "IntervalReadings": pf_blocks})
+            if freq_blocks:
+                blocks.append({"readingType": "IEC61968-9.Frequency.Hz", "IntervalReadings": freq_blocks})
 
             meter_readings_payload.append({
                 "EndDevice": {"mRID": meter_id},

@@ -50,6 +50,7 @@ PARSE_DIAGNOSTIC_CODES = {
     "UNSUPPORTED_DATA_TYPE",
     "INVALID_CSV_INPUT",
 }
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 SEMANTIC_DIAGNOSTIC_CODES = {
     "MISSING_ACTIVE_IMPORT_ENERGY",
     "MISSING_ACT_WH",
@@ -137,6 +138,7 @@ def _execute_workbench_payload(
     content_str: str,
     db: Session,
 ) -> Dict[str, Any]:
+    _ensure_payload_size(content_str.encode("utf-8", errors="replace"))
     start_time = time.time()
     source_adapter = get_adapter(source_vendor)
     if not source_adapter:
@@ -210,8 +212,12 @@ def _execute_workbench_payload(
     target_output = None
     if target_vendor and target_vendor != "none":
         target_adapter = get_adapter(target_vendor)
-        if target_adapter:
-            target_output = target_adapter.serialize_from_canonical(canonical_payload)
+        if not target_adapter:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Target vendor '{target_vendor}' is not recognized.",
+            )
+        target_output = target_adapter.serialize_from_canonical(canonical_payload)
 
     parse_diagnostics = [issue.model_dump() for issue in parse_issues]
     if not parsing_succeeded and not parse_diagnostics:
@@ -301,6 +307,7 @@ def _execute_workbench_payload(
         "valid_records": valid_count,
         "invalid_records": invalid_count,
         "score": score_breakdown.model_dump(),
+        "conformance_outcome": score_breakdown.grade,
         "issues": [issue.model_dump() for issue in all_issues],
         "findings": findings,
         "ml_results": ml_results,
@@ -409,6 +416,22 @@ def generate_synthetic_data(
     }
 
 
+def _ensure_payload_size(content_bytes: bytes) -> None:
+    """Reject payloads before parsing can consume excessive memory or CPU."""
+    if len(content_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Upload exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MiB limit.",
+        )
+
+
+async def _read_upload_payload(file: UploadFile) -> str:
+    """Read at most the supported text payload size before decoding it."""
+    content_bytes = await file.read(MAX_UPLOAD_BYTES + 1)
+    _ensure_payload_size(content_bytes)
+    return content_bytes.decode("utf-8", errors="replace")
+
+
 @workbench_router.post("/workbench/execute")
 async def execute_interoperability_test(
     source_vendor: str = Form(...),
@@ -419,8 +442,7 @@ async def execute_interoperability_test(
 ):
     content_str = ""
     if file:
-        content_bytes = await file.read()
-        content_str = content_bytes.decode("utf-8", errors="replace")
+        content_str = await _read_upload_payload(file)
     elif raw_payload:
         content_str = raw_payload
     else:
@@ -491,6 +513,10 @@ def compare_test_runs(request: CompareRunsInput, db: Session = Depends(get_db)):
 
 @roundtrip_router.post("/roundtrip")
 def roundtrip_payload(request: RoundTripInput):
+    try:
+        _ensure_payload_size(json.dumps(request.payload, default=str).encode("utf-8"))
+    except HTTPException:
+        raise
     source_adapter = get_adapter(request.vendor_a)
     target_adapter = get_adapter(request.vendor_b)
     if not source_adapter:

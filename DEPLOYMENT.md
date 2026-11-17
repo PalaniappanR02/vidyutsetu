@@ -61,3 +61,6 @@ VidyutSetu is stateless aside from its SQLite database file (`vidyutsetu.db`), m
 - **Start Command**: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
 - **Port**: Set by hosting environment (default 8000).
 - **Persistent Storage**: Mount volume at `/app/vidyutsetu.db` if audit trail persistence across container restarts is required.
+- **Cross-origin access**: The UI is same-origin by default. If a separately hosted
+  frontend must call the API, set `VIDYUTSETU_CORS_ORIGINS` to a comma-separated
+  allow-list such as `https://workbench.utility.example`; do not use a wildcard.
