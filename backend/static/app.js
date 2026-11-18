@@ -197,15 +197,22 @@ function pct(value) {
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** "17 Nov 2026, 1:48 PM". Stored and API values keep their original format. */
+/** "17 Nov 2026, 1:48 PM IST". Stored and API values keep their original format. */
 function fmtDate(value) {
   if (!value) return '—';
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
-  const hours = d.getHours();
+  let input = value;
+  // The API stores UTC but SQLite drops the offset; without one, Date would read it as local time.
+  if (typeof input === 'string' && /T\d{2}:\d{2}/.test(input) && !/(Z|[+-]\d{2}:?\d{2})$/i.test(input)) {
+    input += 'Z';
+  }
+  const parsed = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  // Always IST (UTC+5:30, no DST), whatever the viewer's machine timezone is.
+  const d = new Date(parsed.getTime() + 330 * 60 * 1000);
+  const hours = d.getUTCHours();
   const h12 = hours % 12 === 0 ? 12 : hours % 12;
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-  return `${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}, ${h12}:${minutes} ${hours < 12 ? 'AM' : 'PM'}`;
+  const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${d.getUTCDate()} ${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCFullYear()}, ${h12}:${minutes} ${hours < 12 ? 'AM' : 'PM'} IST`;
 }
 
 /** Grade badges stay text-identical; only the filled pill colour changes. */

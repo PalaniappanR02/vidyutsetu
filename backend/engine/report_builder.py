@@ -6,7 +6,7 @@ actually stored, with every interpolated value HTML-escaped.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from html import escape
 from typing import Any, Mapping, Sequence
 
@@ -17,6 +17,19 @@ DISCLOSURE = (
     "checks remain authoritative. This report does not certify compliance with "
     "IEC 61968-9, DLSS/COSEM or IS 15959."
 ).replace("DLSS", "DLMS")
+
+
+IST = timezone(timedelta(hours=5, minutes=30), "IST")
+
+
+def _ist(value: datetime) -> str:
+    """Stored times are UTC; SQLite returns them without an offset."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    local = value.astimezone(IST)
+    hour = local.hour % 12 or 12
+    meridiem = "AM" if local.hour < 12 else "PM"
+    return f"{local.day} {local:%b %Y}, {hour}:{local:%M} {meridiem} IST"
 
 
 def _row(label: str, value: Any) -> str:
@@ -50,7 +63,7 @@ def build_run_report(
     generated_at: datetime | None = None,
 ) -> str:
     """Render the conformance report for a ``DBTestRun`` row."""
-    generated = (generated_at or datetime.now(timezone.utc)).isoformat()
+    generated = _ist(generated_at or datetime.now(timezone.utc))
     data_quality = (
         f"{run.data_quality_score:.1f} / 100"
         if run.data_quality_score is not None
@@ -61,7 +74,7 @@ def build_run_report(
     summary_rows = "".join(
         [
             _row("Run id", run.run_id),
-            _row("Executed at", run.execution_time.isoformat() if run.execution_time else "-"),
+            _row("Executed at", _ist(run.execution_time) if run.execution_time else "-"),
             _row("Source vendor", run.source_vendor),
             _row("Target vendor", run.target_vendor or "none"),
             _row("Total records", run.total_records),
