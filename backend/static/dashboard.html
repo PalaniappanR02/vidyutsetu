@@ -406,7 +406,11 @@
 
     .vs-topbar { display: none; align-items: center; justify-content: space-between; gap: .5rem;
                  background: var(--vs-navy); padding: .6rem .9rem; position: sticky; top: 0; z-index: 45; }
-    .vs-topbar-brand { color: #fff; font-weight: 700; font-size: 1.02rem; }
+    .vs-topbar-brand { color: #fff; font-weight: 700; font-size: 1.02rem; display: flex; align-items: center; gap: .5rem; }
+    .vs-logo-chip { background: #fff; border-radius: 8px; padding: 3px 6px; display: inline-flex; align-items: center; flex: 0 0 auto; }
+    .vs-logo-chip img { height: 26px; width: auto; display: block; }
+    .vs-topbar .vs-logo-chip img { height: 22px; }
+    .vs-brand-row { display: flex; align-items: center; gap: .6rem; }
 
     .vs-sidebar-overlay { position: fixed; inset: 0; background: rgba(5, 15, 28, .55); z-index: 39; }
 
@@ -491,7 +495,7 @@
     <button id="sidebar-toggle" class="icon-btn" onclick="toggleSidebar()" aria-expanded="false" aria-controls="app-sidebar" aria-label="Open menu">
       <i data-lucide="menu" class="w-4 h-4" aria-hidden="true"></i>
     </button>
-    <p class="vs-topbar-brand">vidyut<span style="color:var(--vs-cyan)">setu</span></p>
+    <p class="vs-topbar-brand"><span class="vs-logo-chip"><img src="/static/VidyutSetu_Logo.png" alt="VidyutSetu logo"></span><span>vidyut<span style="color:var(--vs-cyan)">setu</span></span></p>
     <button class="icon-btn" onclick="toggleTheme()" id="theme-toggle-mobile" aria-label="Switch colour theme">
       <i data-lucide="moon" class="w-4 h-4" aria-hidden="true"></i>
     </button>
@@ -501,7 +505,10 @@
 
   <aside id="app-sidebar" class="vs-sidebar">
     <div class="vs-sidebar-brand">
-      <p class="vs-brand-name">vidyut<span style="color:var(--vs-cyan)">setu</span></p>
+      <div class="vs-brand-row">
+        <span class="vs-logo-chip"><img src="/static/VidyutSetu_Logo.png" alt="VidyutSetu logo"></span>
+        <p class="vs-brand-name">vidyut<span style="color:var(--vs-cyan)">setu</span></p>
+      </div>
       <p class="vs-brand-tagline">AMI interoperability &amp; conformance workbench</p>
     </div>
 
