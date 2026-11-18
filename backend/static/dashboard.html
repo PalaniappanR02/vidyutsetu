@@ -79,13 +79,16 @@
 
     .btn { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; border-radius: 10px;
            font-size: .82rem; font-weight: 600; padding: .5rem .9rem; border: 1px solid var(--vs-line-strong);
-           background: var(--vs-surface); color: var(--vs-body); cursor: pointer; }
+           background: var(--vs-surface); color: var(--vs-body); cursor: pointer;
+           transition: background-color .15s ease, border-color .15s ease, color .15s ease,
+                       box-shadow .15s ease, transform .05s ease, filter .15s ease; }
     .btn:hover { background: var(--vs-surface-alt); }
+    .btn:active { transform: translateY(1px); filter: brightness(.94); }
     .btn-primary { background: var(--vs-teal-deep); border-color: var(--vs-teal-deep); color: #fff; }
     .btn-primary:hover { background: #096B75; }
     .btn-cta { background: var(--vs-amber); border-color: var(--vs-amber); color: #3B2600; }
     .btn-cta:hover { background: #DD8C05; }
-    .btn[disabled] { opacity: .6; cursor: progress; }
+    .btn[disabled] { opacity: .6; cursor: progress; pointer-events: none; }
 
     .input, .select, textarea {
       width: 100%; background: var(--vs-surface); color: var(--vs-ink);
@@ -138,40 +141,13 @@
     #results-container, #view-workbench, #view-overview > .card, #diagnostics-card { scroll-margin-top: 7rem; }
 
     @media (max-width: 768px) {
-      /* One scrollable tab row, so the sticky header does not eat the viewport. */
-      nav[role="tablist"] {
-        flex-wrap: nowrap; overflow-x: auto; width: 100%;
-        scrollbar-width: none; -ms-overflow-style: none;
-      }
-      nav[role="tablist"]::-webkit-scrollbar { display: none; }
-      nav[role="tablist"]::after {
-        content: "Swipe for more sections →"; position: sticky; right: 0; flex: 0 0 auto;
-        padding: .4rem .5rem; font-size: .67rem; color: #DFF1F4;
-        background: linear-gradient(90deg, transparent, var(--vs-navy) 25%);
-        pointer-events: none;
-      }
-      header > div { padding-left: .85rem; padding-right: .85rem; }
       .card-pad { padding: 1rem 1.05rem; }
-      .vs-utility { width: 100%; justify-content: flex-end; }
-      .vs-nav { width: 100%; }
       #results-container, #view-workbench, #view-overview > .card, #diagnostics-card { scroll-margin-top: 8.5rem; }
     }
 
     @media (max-width: 480px) {
-      .vs-nav-group {
-        width: 100%;
-      }
-      .nav-tabs {
-        width: 100%;
-        justify-content: flex-start;
-      }
-      .vs-utility {
-        width: 100%;
-        justify-content: space-between;
-      }
-      .btn, .nav-tab {
-        min-height: 2.5rem;
-      }
+      .nav-tabs { width: 100%; justify-content: flex-start; }
+      .btn, .nav-tab { min-height: 2.5rem; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -205,7 +181,6 @@
     }
 
     body { font-size: 14px; }
-    main#main { max-width: 1200px; }
     .card { border-radius: var(--vs-radius); box-shadow: var(--vs-shadow-card); }
     .card-pad { padding: var(--vs-space-5); }
     .label { font-size: 12px; color: var(--vs-muted); }
@@ -255,9 +230,8 @@
     .btn-cta { background: var(--vs-teal-deep); border-color: var(--vs-teal-deep); color: #fff; }
     .btn-cta:hover { background: #096B75; }
 
-    /* header: grouped sections + one utility area, no stuck highlight */
-    header a, header button { -webkit-tap-highlight-color: transparent; }
-    .vs-nav { display: flex; align-items: center; gap: var(--vs-space-4); flex-wrap: wrap; }
+    /* sidebar nav: grouped sections, no stuck highlight */
+    aside a, aside button { -webkit-tap-highlight-color: transparent; }
     .vs-nav-group { display: flex; align-items: center; gap: var(--vs-space-1); }
     .vs-nav-label { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: #8FB0C8; margin-right: 2px; }
     .nav-tabs { display: flex; align-items: center; gap: 2px; }
@@ -268,19 +242,9 @@
     a.nav-tab, a.nav-tab:visited { color: #CFE0EE; text-decoration: none; }
     a.nav-tab:hover { color: #fff; }
     .nav-tab:focus-visible, a.nav-tab:focus-visible { outline: 2px solid #7FE3EC; outline-offset: 2px; }
-    .vs-utility { display: flex; align-items: center; gap: var(--vs-space-2); margin-left: auto; }
-    .vs-utility .pill { font-size: 11px; }
 
     /* workbench / roundtrip flow illustrations */
-    .vs-flow { display: flex; align-items: center; gap: var(--vs-space-2); flex-wrap: wrap;
-               font-size: 12px; color: var(--vs-muted); margin-bottom: var(--vs-space-4); }
-    .vs-flow .step { padding: .2rem .55rem; border: 1px solid var(--vs-line); border-radius: 999px;
-                     background: var(--vs-surface-alt); color: var(--vs-body); }
-    .vs-arrow { color: var(--vs-teal-deep); font-weight: 700; }
     .sample-group { display: flex; align-items: center; gap: var(--vs-space-1); flex-wrap: wrap; }
-    .roundtrip-flow { display: flex; align-items: center; gap: var(--vs-space-2); flex-wrap: wrap; margin: 0; }
-    .roundtrip-flow .node { border: 1px solid var(--vs-line); border-radius: var(--vs-radius); padding: .45rem .7rem;
-                            background: var(--vs-surface-alt); font-size: 12px; font-weight: 600; color: var(--vs-ink); }
     .vendor-grid { gap: var(--vs-space-4); }
     .vendor-card { cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease; }
     .vendor-card:hover { border-color: var(--vs-teal); box-shadow: 0 2px 8px rgba(11,124,135,.14); }
@@ -300,31 +264,12 @@
     .mapping-table tbody td:not(:first-child) { font-family: var(--vs-mono); font-size: 12px; }
     .mapping-table tbody td:first-child { font-family: var(--vs-mono); font-size: 12px; font-weight: 700; }
 
-    @media (max-width: 1100px) {
-      .vs-nav { gap: var(--vs-space-2); }
-      .vs-nav-label { display: none; }
-      .vs-utility { margin-left: 0; }
-    }
     @media (max-width: 768px) {
-      .vs-nav { width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; position: relative; }
-      .vs-nav::-webkit-scrollbar { display: none; }
-      .vs-nav { padding-right: 3.25rem; }
-      .vs-nav::after {
-        content: "more →"; position: absolute; right: 0; top: 50%; transform: translateY(-50%);
-        padding: .3rem .4rem .3rem .9rem; font-size: 10px; color: #DFF1F4;
-        background: linear-gradient(90deg, transparent, var(--vs-navy) 40%); pointer-events: none;
-      }
-      .vs-nav-label { display: none; }
-      .vs-utility { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
       .vs-flow { font-size: 11px; }
       #results-container, #view-workbench, #view-overview > .card, #diagnostics-card { scroll-margin-top: 10.5rem; }
     }
     @media (max-width: 480px) {
-      header > div { padding-top: .5rem; padding-bottom: .5rem; }
-      .brand-tagline { display: none; }
       .nav-tab { padding: .3rem .45rem; font-size: 12px; }
-      .vs-utility { gap: 6px; }
-      .vs-utility .pill { font-size: 10px; padding: .12rem .4rem; }
       .card-pad { padding: .9rem .95rem; }
     }
 
@@ -380,7 +325,7 @@
     }
 
     body { font-size: 15px; line-height: 1.55; }
-    main#main { max-width: 1320px; padding-top: 2rem; }
+    main#main { padding-top: 2rem; }
     .page-heading { display: grid; gap: .35rem; padding: .15rem 0 .25rem; }
     .page-heading h1 {
       margin: 0; color: var(--vs-ink); font-size: clamp(1.8rem, 2.5vw, 2.25rem);
@@ -414,17 +359,17 @@
     }
     table.vs td { padding: .75rem .8rem; }
     .table-scroll { border: 1px solid var(--vs-line); border-radius: 9px; }
-    .vs-flow { gap: .65rem; margin: .15rem 0 1.1rem; font-size: .85rem; }
+    .vs-flow { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; margin: 1rem 0 0; font-size: .85rem; color: var(--vs-muted); }
     .vs-flow .step {
-      padding: .5rem .75rem; border-color: var(--vs-line-strong); border-radius: 8px;
+      border: 1px solid var(--vs-line-strong); padding: .5rem .75rem; border-radius: 8px;
       background: var(--vs-surface); color: var(--vs-ink); font-weight: 650;
     }
     .vs-flow .step:nth-of-type(3) { background: var(--vs-green); color: #fff; border-color: var(--vs-green); }
-    .vs-arrow { color: var(--vs-teal-deep); font-size: 1rem; }
-    .roundtrip-flow { gap: .65rem; }
+    .vs-arrow { color: var(--vs-teal-deep); font-weight: 700; font-size: 1rem; }
+    .roundtrip-flow { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; margin: 0; }
     .roundtrip-flow .node {
-      padding: .6rem .8rem; border-color: var(--vs-line-strong); border-radius: 8px;
-      background: var(--vs-surface); font-size: .84rem;
+      border: 1px solid var(--vs-line-strong); padding: .6rem .8rem; border-radius: 8px;
+      background: var(--vs-surface); font-size: .84rem; font-weight: 600; color: var(--vs-ink);
     }
     .roundtrip-flow .node:nth-of-type(3) {
       background: var(--vs-green); border-color: var(--vs-green); color: #fff;
@@ -442,6 +387,99 @@
       .page-heading h1 { font-size: 1.75rem; }
       .card-pad { padding: 1.1rem; }
     }
+
+    /* ================= left-hand navigation shell (fluid sidebar layout) ================= */
+    :root { --vs-sidebar-w: 264px; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    #workbench-shell { display: flex; align-items: stretch; width: 100%; height: 100vh; }
+
+    /* Only the content column scrolls; the sidebar and topbar stay put. */
+    .vs-content { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; }
+    .vs-main { width: 100%; max-width: 1480px; margin: 0 auto; box-sizing: border-box; }
+    .vs-content footer { max-width: 1480px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+
+    .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem;
+                border-radius: 8px; color: #DFF1F4; background: transparent; border: 1px solid transparent; cursor: pointer;
+                transition: background-color .15s ease, transform .05s ease; }
+    .icon-btn:hover { background: rgba(255,255,255,.1); }
+    .icon-btn:active { transform: translateY(1px); }
+
+    .vs-topbar { display: none; align-items: center; justify-content: space-between; gap: .5rem;
+                 background: var(--vs-navy); padding: .6rem .9rem; position: sticky; top: 0; z-index: 45; }
+    .vs-topbar-brand { color: #fff; font-weight: 700; font-size: 1.02rem; }
+
+    .vs-sidebar-overlay { position: fixed; inset: 0; background: rgba(5, 15, 28, .55); z-index: 39; }
+
+    .vs-sidebar {
+      width: var(--vs-sidebar-w); flex: 0 0 var(--vs-sidebar-w); background: var(--vs-navy);
+      display: flex; flex-direction: column; gap: clamp(.4rem, 1.2vh, .85rem); padding: clamp(.6rem, 1.6vh, 1rem) 0;
+      height: 100vh; overflow: hidden; z-index: 40;
+      border-right: 1px solid rgba(255,255,255,.08);
+    }
+    .vs-sidebar-brand { padding: .2rem .35rem clamp(.5rem, 1.2vh, .85rem); margin: 0 .9rem; border-bottom: 1px solid rgba(255,255,255,.1); }
+    .vs-brand-name { color: #fff; font-weight: 800; font-size: 1.22rem; letter-spacing: -.01em; }
+    .vs-brand-tagline { color: #9FBBD1; font-size: .74rem; margin-top: .2rem; line-height: 1.35; }
+
+    .vs-sidebar-nav { display: flex; flex-direction: column; gap: clamp(.45rem, 1.4vh, .9rem); flex: 1 1 auto; min-height: 0; padding: 0 .55rem; }
+    .vs-sidebar .vs-nav-group { display: flex; flex-direction: column; align-items: stretch; gap: .15rem; }
+    .vs-sidebar .vs-nav-label { font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+                                 color: var(--vs-cyan); padding: 0 .9rem; margin: 0 0 clamp(.1rem, .4vh, .3rem); }
+    .vs-sidebar .nav-tabs { display: flex; flex-direction: column; align-items: stretch; width: 100%; gap: .15rem; }
+    .vs-sidebar .nav-tab, .vs-sidebar-footer .nav-tab {
+      display: flex; align-items: center; justify-content: flex-start; gap: .6rem; width: 100%; text-align: left; box-sizing: border-box;
+      padding: clamp(.3rem, .75vh, .55rem) .9rem; border-radius: 8px; font-size: .86rem; font-weight: 600; color: #CFE0EE;
+      transition: background-color .15s ease, color .15s ease, transform .05s ease;
+    }
+    .vs-sidebar .nav-tab:hover, .vs-sidebar-footer .nav-tab:hover { background: rgba(255,255,255,.08); color: #fff; }
+    .vs-sidebar .nav-tab:active, .vs-sidebar-footer .nav-tab:active { transform: scale(.98); }
+    .vs-sidebar .nav-tab[aria-selected="true"] {
+      background: var(--vs-teal-deep); color: #fff; box-shadow: inset 3px 0 0 var(--vs-cyan);
+    }
+    .vs-sidebar .nav-tab i, .vs-sidebar-footer .nav-tab i { flex: 0 0 auto; opacity: .9; }
+
+    .vs-sidebar-footer {
+      display: flex; flex-direction: column; align-items: stretch; gap: clamp(.15rem, .5vh, .35rem);
+      padding: clamp(.45rem, 1vh, .9rem) .55rem 0;
+      border-top: 1px solid rgba(255,255,255,.1); margin-top: auto; flex: 0 0 auto;
+    }
+    .vs-sidebar-footer .pill { width: 100%; justify-content: center; box-sizing: border-box; padding: clamp(.2rem, .5vh, .4rem) .9rem; }
+    .vs-sidebar-footer #current-user { background: rgba(255,255,255,.08); color: #DFF1F4; border-color: rgba(255,255,255,.2); }
+
+    @media (max-width: 1023px) {
+      #workbench-shell { flex-direction: column; }
+      .vs-topbar { display: flex; }
+      .vs-content { height: auto; flex: 1 1 auto; }
+      .vs-sidebar {
+        position: fixed; left: 0; top: 0; height: 100vh; transform: translateX(-100%);
+        transition: transform .22s ease; box-shadow: 4px 0 24px rgba(0,0,0,.25);
+      }
+      .vs-sidebar.is-open { transform: translateX(0); }
+      .vs-sidebar-overlay[hidden] { display: none; }
+    }
+    @media (min-width: 1024px) {
+      .vs-sidebar-overlay { display: none !important; }
+    }
+    @media (max-width: 480px) {
+      :root { --vs-sidebar-w: 85vw; }
+    }
+
+    /* ================= numbered steps (workbench) ================= */
+    .step-block { padding: 1.25rem 0; border-top: 1px solid var(--vs-line); }
+    .step-block:first-of-type { padding-top: .25rem; border-top: 0; }
+    .step-block-last { padding-bottom: .25rem; }
+    .step-head { display: flex; align-items: flex-start; gap: .75rem; margin-bottom: 1rem; }
+    .step-num {
+      flex: 0 0 auto; width: 1.9rem; height: 1.9rem; border-radius: 999px; background: var(--vs-teal-deep);
+      color: #fff; font-weight: 800; font-size: .92rem; display: grid; place-items: center;
+    }
+    .step-title { font-weight: 700; font-size: .98rem; color: var(--vs-ink); margin: 0 0 .15rem; }
+    .step-body { padding-left: calc(1.9rem + .75rem); }
+    @media (max-width: 560px) { .step-body { padding-left: 0; } }
+
+    .checks-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .5rem .9rem;
+                    list-style: none; margin: 0; padding: 0; color: var(--vs-muted); }
+    .checks-grid li { display: flex; align-items: flex-start; gap: .45rem; }
+    .checks-grid i { color: var(--vs-teal-deep); margin-top: .1rem; }
   </style>
 </head>
 <body class="min-h-screen flex flex-col antialiased">
@@ -449,62 +487,68 @@
   <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to content</a>
 
   <div id="workbench-shell" hidden>
-  <header style="background: var(--vs-navy);" class="sticky top-0 z-40">
-    <div class="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
-      <div class="flex items-center gap-3">
-        <span style="background:#fff;border-radius:10px;padding:3px 7px;display:inline-flex;align-items:center">
-          <img src="/static/VidyutSetu_Logo.png" alt="VidyutSetu logo" style="height:30px;width:auto">
-        </span>
-        <div>
-          <p class="text-white font-bold text-lg leading-tight">vidyut<span style="color:#7FE3EC">setu</span></p>
-          <p class="text-xs brand-tagline" style="color:#A9C4D8">AMI interoperability and conformance workbench</p>
-        </div>
-      </div>
+  <div class="vs-topbar">
+    <button id="sidebar-toggle" class="icon-btn" onclick="toggleSidebar()" aria-expanded="false" aria-controls="app-sidebar" aria-label="Open menu">
+      <i data-lucide="menu" class="w-4 h-4" aria-hidden="true"></i>
+    </button>
+    <p class="vs-topbar-brand">vidyut<span style="color:var(--vs-cyan)">setu</span></p>
+    <button class="icon-btn" onclick="toggleTheme()" id="theme-toggle-mobile" aria-label="Switch colour theme">
+      <i data-lucide="moon" class="w-4 h-4" aria-hidden="true"></i>
+    </button>
+  </div>
 
-      <nav class="vs-nav" aria-label="Workbench sections">
-        <div class="vs-nav-group">
-          <span class="vs-nav-label" aria-hidden="true">Test</span>
-          <div class="nav-tabs" role="tablist" aria-label="Test sections">
-            <button role="tab" aria-selected="false" id="tab-btn-workbench" class="nav-tab" onclick="switchTab('workbench')" data-role-required="operator">Workbench</button>
-            <button role="tab" aria-selected="false" id="tab-btn-compare" class="nav-tab" onclick="switchTab('compare')" data-role-required="operator">Compare</button>
-            <button role="tab" aria-selected="false" id="tab-btn-roundtrip" class="nav-tab" onclick="switchTab('roundtrip')" data-role-required="operator">Roundtrip</button>
-            <button role="tab" aria-selected="false" id="tab-btn-suites" class="nav-tab" onclick="switchTab('suites')">Suites</button>
-          </div>
-        </div>
+  <div id="sidebar-overlay" class="vs-sidebar-overlay" onclick="toggleSidebar(false)" hidden></div>
 
-        <div class="vs-nav-group">
-          <span class="vs-nav-label" aria-hidden="true">Reference</span>
-          <div class="nav-tabs" role="tablist" aria-label="Reference sections">
-            <button role="tab" aria-selected="false" id="tab-btn-mapping" class="nav-tab" onclick="switchTab('mapping')">Mapping</button>
-            <button role="tab" aria-selected="false" id="tab-btn-vendors" class="nav-tab" onclick="switchTab('vendors')">Vendors</button>
-            <button role="tab" aria-selected="false" id="tab-btn-standards" class="nav-tab" onclick="switchTab('standards')">Standards</button>
-          </div>
-        </div>
-
-        <div class="vs-nav-group">
-          <span class="vs-nav-label" aria-hidden="true">Results</span>
-          <div class="nav-tabs" role="tablist" aria-label="Results sections">
-            <button role="tab" aria-selected="true" id="tab-btn-overview" class="nav-tab" onclick="switchTab('overview')">Overview</button>
-            <button role="tab" aria-selected="false" id="tab-btn-history" class="nav-tab" onclick="switchTab('history')">History</button>
-          </div>
-        </div>
-      </nav>
-
-      <div class="vs-utility">
-        <span class="pill" id="current-user" hidden></span>
-        <button id="manage-users" class="nav-tab" onclick="openUserAdmin()" data-role-required="admin" hidden>Manage users</button>
-        <button id="logout-button" class="nav-tab" onclick="logout()" hidden>Sign out</button>
-        <span class="pill" id="standards-badge" style="background:rgba(255,255,255,.12);color:#DFF1F4;border-color:rgba(255,255,255,.25)">
-          <span style="width:7px;height:7px;border-radius:999px;background:#19C2D0;display:inline-block" aria-hidden="true"></span>
-          IEC 61968-9 aligned
-        </span>
-        <a href="/" class="nav-tab">Landing page</a>
-        <button id="theme-toggle" class="nav-tab" onclick="toggleTheme()" aria-label="Switch colour theme">Dark theme</button>
-      </div>
+  <aside id="app-sidebar" class="vs-sidebar">
+    <div class="vs-sidebar-brand">
+      <p class="vs-brand-name">vidyut<span style="color:var(--vs-cyan)">setu</span></p>
+      <p class="vs-brand-tagline">AMI interoperability &amp; conformance workbench</p>
     </div>
-  </header>
 
-  <main id="main" class="flex-1 w-full max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <nav class="vs-sidebar-nav" aria-label="Workbench sections">
+      <div class="vs-nav-group">
+        <p class="vs-nav-label">Test</p>
+        <div class="nav-tabs" role="tablist" aria-label="Test sections">
+          <button role="tab" aria-selected="false" id="tab-btn-workbench" class="nav-tab" onclick="switchTab('workbench')" data-role-required="operator"><i data-lucide="flask-conical" class="w-4 h-4" aria-hidden="true"></i><span>Workbench</span></button>
+          <button role="tab" aria-selected="false" id="tab-btn-compare" class="nav-tab" onclick="switchTab('compare')" data-role-required="operator"><i data-lucide="git-compare" class="w-4 h-4" aria-hidden="true"></i><span>Compare</span></button>
+          <button role="tab" aria-selected="false" id="tab-btn-roundtrip" class="nav-tab" onclick="switchTab('roundtrip')" data-role-required="operator"><i data-lucide="repeat" class="w-4 h-4" aria-hidden="true"></i><span>Roundtrip</span></button>
+          <button role="tab" aria-selected="false" id="tab-btn-suites" class="nav-tab" onclick="switchTab('suites')"><i data-lucide="layers" class="w-4 h-4" aria-hidden="true"></i><span>Suites</span></button>
+        </div>
+      </div>
+
+      <div class="vs-nav-group">
+        <p class="vs-nav-label">Reference</p>
+        <div class="nav-tabs" role="tablist" aria-label="Reference sections">
+          <button role="tab" aria-selected="false" id="tab-btn-mapping" class="nav-tab" onclick="switchTab('mapping')"><i data-lucide="map" class="w-4 h-4" aria-hidden="true"></i><span>Mapping</span></button>
+          <button role="tab" aria-selected="false" id="tab-btn-vendors" class="nav-tab" onclick="switchTab('vendors')"><i data-lucide="server" class="w-4 h-4" aria-hidden="true"></i><span>Vendors</span></button>
+          <button role="tab" aria-selected="false" id="tab-btn-standards" class="nav-tab" onclick="switchTab('standards')"><i data-lucide="book-open" class="w-4 h-4" aria-hidden="true"></i><span>Standards</span></button>
+        </div>
+      </div>
+
+      <div class="vs-nav-group">
+        <p class="vs-nav-label">Results</p>
+        <div class="nav-tabs" role="tablist" aria-label="Results sections">
+          <button role="tab" aria-selected="true" id="tab-btn-overview" class="nav-tab" onclick="switchTab('overview')"><i data-lucide="layout-dashboard" class="w-4 h-4" aria-hidden="true"></i><span>Overview</span></button>
+          <button role="tab" aria-selected="false" id="tab-btn-history" class="nav-tab" onclick="switchTab('history')"><i data-lucide="history" class="w-4 h-4" aria-hidden="true"></i><span>History</span></button>
+        </div>
+      </div>
+    </nav>
+
+    <div class="vs-sidebar-footer">
+      <span class="pill" id="current-user" hidden></span>
+      <button id="manage-users" class="nav-tab" onclick="openUserAdmin()" data-role-required="admin" hidden><i data-lucide="users" class="w-4 h-4" aria-hidden="true"></i><span>Manage users</span></button>
+      <button id="logout-button" class="nav-tab" onclick="logout()" hidden><i data-lucide="log-out" class="w-4 h-4" aria-hidden="true"></i><span>Sign out</span></button>
+      <span class="pill" id="standards-badge" style="background:rgba(255,255,255,.1);color:#DFF1F4;border-color:rgba(255,255,255,.2)">
+        <span style="width:7px;height:7px;border-radius:999px;background:#19C2D0;display:inline-block" aria-hidden="true"></span>
+        IEC 61968-9 aligned
+      </span>
+      <a href="/" class="nav-tab"><i data-lucide="arrow-left" class="w-4 h-4" aria-hidden="true"></i><span>Landing page</span></a>
+      <button id="theme-toggle" class="nav-tab" onclick="toggleTheme()" aria-label="Switch colour theme"><i data-lucide="moon" class="w-4 h-4" aria-hidden="true"></i><span>Dark theme</span></button>
+    </div>
+  </aside>
+
+  <div class="vs-content">
+  <main id="main" class="vs-main flex-1 px-4 py-6 space-y-6">
 
     <!-- OVERVIEW -->
     <section id="view-overview" class="tab-view space-y-6" role="tabpanel" aria-labelledby="tab-btn-overview">
@@ -621,28 +665,22 @@
         <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
           <div>
             <h2 class="font-bold" style="color:var(--vs-ink)">AMI interoperability test configuration</h2>
-            <p class="label">Choose vendor formats, paste a payload or generate synthetic telemetry, then run the five-stage pipeline.</p>
+            <p class="label">Three steps: pick systems, add a payload, then run the five-stage pipeline.</p>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <button class="btn btn-cta" onclick="runSampleValidation()" data-role-required="operator">Try sample validation</button>
-            <div class="sample-group">
-              <span class="label">Load sample:</span>
-              <button class="btn" onclick="loadSamplePreset('alpha-hes')" data-role-required="operator">Alpha sample</button>
-              <button class="btn" onclick="loadSamplePreset('beta-hes')" data-role-required="operator">Beta sample</button>
-              <button class="btn" onclick="loadSamplePreset('gamma-mdms')" data-role-required="operator">Gamma sample</button>
-              <button class="btn" onclick="loadSamplePreset('delta-legacy')" data-role-required="operator">Delta sample</button>
-            </div>
-          </div>
+          <button class="btn btn-cta" onclick="runSampleValidation()" data-role-required="operator">
+            <i data-lucide="sparkles" class="w-4 h-4"></i><span>Shortcut: try sample validation</span>
+          </button>
         </div>
 
-        <p class="vs-flow" aria-hidden="true">
-          <span class="step">Source system</span><span class="vs-arrow">→</span>
-          <span class="step">Canonical model</span><span class="vs-arrow">→</span>
-          <span class="step">Target system</span>
-        </p>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div class="space-y-4">
+        <div class="step-block">
+          <div class="step-head">
+            <span class="step-num">1</span>
+            <div>
+              <h3 class="step-title">Choose the source and target systems</h3>
+              <p class="label">Where the payload comes from, and which format it should convert to.</p>
+            </div>
+          </div>
+          <div class="step-body grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label class="label" for="source-vendor-select">Source vendor format (ingestion)</label>
               <select id="source-vendor-select" class="select mt-1">
@@ -652,29 +690,71 @@
                 <option value="delta-legacy">Delta HES — legacy proprietary milli-units (JSON)</option>
               </select>
             </div>
+            <div>
+              <label class="label" for="target-vendor-select">Target destination system</label>
+              <select id="target-vendor-select" class="select mt-1">
+                <option value="gamma-mdms">Gamma MDMS — CIM IEC 61968-9 (JSON)</option>
+                <option value="alpha-hes">Alpha HES — DLMS/COSEM OBIS IS 15959 (JSON)</option>
+                <option value="beta-hes">Beta HES — proprietary flat load survey (CSV)</option>
+                <option value="delta-legacy">Delta HES — legacy proprietary milli-units (JSON)</option>
+                <option value="none">Validate only (no target output)</option>
+              </select>
+            </div>
+          </div>
+          <p class="vs-flow mt-4" aria-hidden="true">
+            <span class="step">Source system</span><span class="vs-arrow">→</span>
+            <span class="step">Canonical model</span><span class="vs-arrow">→</span>
+            <span class="step">Target system</span>
+          </p>
+        </div>
 
-            <div class="p-4 rounded-xl space-y-3" style="background:var(--vs-surface-alt);border:1px solid var(--vs-line)">
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-xs font-bold" style="color:var(--vs-body)">Synthetic AMI data generator</span>
-                <button class="btn-cta btn" onclick="generateSyntheticIntoWorkbench()" data-role-required="operator">Generate payload</button>
-              </div>
-              <div class="grid grid-cols-2 gap-3 text-xs">
-                <div>
-                  <label class="label" for="gen-meters">Meters</label>
-                  <input type="number" id="gen-meters" value="3" min="1" max="10" class="input mt-1">
+        <div class="step-block">
+          <div class="step-head">
+            <span class="step-num">2</span>
+            <div>
+              <h3 class="step-title">Add a payload</h3>
+              <p class="label">Load a sample, generate synthetic telemetry, paste JSON/CSV, or upload a file — pick one.</p>
+            </div>
+          </div>
+          <div class="step-body space-y-4">
+            <div class="sample-group">
+              <span class="label">Load sample:</span>
+              <button class="btn" onclick="loadSamplePreset('alpha-hes')" data-role-required="operator">Alpha sample</button>
+              <button class="btn" onclick="loadSamplePreset('beta-hes')" data-role-required="operator">Beta sample</button>
+              <button class="btn" onclick="loadSamplePreset('gamma-mdms')" data-role-required="operator">Gamma sample</button>
+              <button class="btn" onclick="loadSamplePreset('delta-legacy')" data-role-required="operator">Delta sample</button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="p-4 rounded-xl space-y-3" style="background:var(--vs-surface-alt);border:1px solid var(--vs-line)">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold" style="color:var(--vs-body)">Synthetic AMI data generator</span>
+                  <button class="btn-cta btn" onclick="generateSyntheticIntoWorkbench()" data-role-required="operator">Generate payload</button>
                 </div>
-                <div>
-                  <label class="label" for="gen-intervals">Intervals per meter</label>
-                  <input type="number" id="gen-intervals" value="4" min="1" max="24" class="input mt-1">
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label class="label" for="gen-meters">Meters</label>
+                    <input type="number" id="gen-meters" value="3" min="1" max="10" class="input mt-1">
+                  </div>
+                  <div>
+                    <label class="label" for="gen-intervals">Intervals per meter</label>
+                    <input type="number" id="gen-intervals" value="4" min="1" max="24" class="input mt-1">
+                  </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-4 text-xs body-text">
+                  <label class="flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" id="gen-inject-anomalies" class="rounded"> Inject electrical anomalies
+                  </label>
+                  <label class="flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" id="gen-inject-tampers" class="rounded"> Inject tamper alarms
+                  </label>
                 </div>
               </div>
-              <div class="flex flex-wrap items-center gap-4 text-xs body-text">
-                <label class="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" id="gen-inject-anomalies" class="rounded"> Inject electrical anomalies
-                </label>
-                <label class="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" id="gen-inject-tampers" class="rounded"> Inject tamper alarms
-                </label>
+
+              <div class="rounded-xl p-5 text-center flex flex-col items-center justify-center" style="border:2px dashed var(--vs-line-strong);background:var(--vs-surface-alt)">
+                <i data-lucide="upload-cloud" class="w-7 h-7 mb-2" style="color:var(--vs-muted)"></i>
+                <label class="text-xs font-medium body-text block" for="file-upload-input">Or upload a JSON/CSV payload file</label>
+                <input type="file" id="file-upload-input" class="text-xs mt-2" accept=".json,.csv,text/csv,application/json" aria-label="Upload a JSON or CSV payload file">
               </div>
             </div>
 
@@ -683,48 +763,32 @@
                 <label class="label" for="raw-payload-input">Raw payload</label>
                 <span class="label">JSON or CSV</span>
               </div>
-              <textarea id="raw-payload-input" rows="12" class="code mt-1" placeholder="Paste a vendor payload, e.g. { &quot;system_id&quot;: &quot;alpha-hes&quot;, &quot;meter_data&quot;: [ … ] } — or load a sample above."></textarea>
-            </div>
-
-            <div>
-              <p id="form-error" class="text-xs mb-2 hidden" role="alert" style="color:var(--vs-red)"></p>
-              <button id="btn-run-workbench" class="btn btn-primary w-full py-3" onclick="runWorkbenchExecution()" data-role-required="operator">
-                <i data-lucide="play" class="w-4 h-4"></i>
-                <span>Run validation and transformation</span>
-              </button>
-              <p id="run-status" class="text-xs mt-2 hidden" role="status" aria-live="polite" style="color:var(--vs-body)"></p>
+              <textarea id="raw-payload-input" rows="10" class="code mt-1" placeholder="Paste a vendor payload, e.g. { &quot;system_id&quot;: &quot;alpha-hes&quot;, &quot;meter_data&quot;: [ … ] } — or load a sample above."></textarea>
             </div>
           </div>
+        </div>
 
-          <div class="space-y-4 flex flex-col justify-between">
-            <div class="space-y-4">
-              <div>
-                <label class="label" for="target-vendor-select"><span class="vs-arrow" aria-hidden="true">→</span> Target destination system</label>
-                <select id="target-vendor-select" class="select mt-1">
-                  <option value="gamma-mdms">Gamma MDMS — CIM IEC 61968-9 (JSON)</option>
-                  <option value="alpha-hes">Alpha HES — DLMS/COSEM OBIS IS 15959 (JSON)</option>
-                  <option value="beta-hes">Beta HES — proprietary flat load survey (CSV)</option>
-                  <option value="delta-legacy">Delta HES — legacy proprietary milli-units (JSON)</option>
-                  <option value="none">Validate only (no target output)</option>
-                </select>
-              </div>
-
-              <div class="rounded-xl p-5 text-center" style="border:2px dashed var(--vs-line-strong);background:var(--vs-surface-alt)">
-                <i data-lucide="upload-cloud" class="w-7 h-7 mx-auto mb-2" style="color:var(--vs-muted)"></i>
-                <label class="text-xs font-medium body-text block" for="file-upload-input">Or upload a JSON/CSV payload file</label>
-                <input type="file" id="file-upload-input" class="text-xs mt-2 mx-auto" accept=".json,.csv,text/csv,application/json" aria-label="Upload a JSON or CSV payload file">
-              </div>
-
-              <div class="p-4 rounded-xl text-xs space-y-2" style="background:var(--vs-surface-alt);border:1px solid var(--vs-line)">
-                <p class="font-bold" style="color:var(--vs-body)">Checks run on ingestion</p>
-                <ul class="space-y-1 muted pl-4 list-disc">
-                  <li>Parse, then syntactic envelope checks</li>
-                  <li>IS 15959 / IEC 62056 OBIS mapping and unit conversion</li>
-                  <li>Physical limits (160–300 V, monotonic kWh, clock drift)</li>
-                  <li>ML fault screening (advisory, synthetic-trained)</li>
-                </ul>
-              </div>
+        <div class="step-block step-block-last">
+          <div class="step-head">
+            <span class="step-num">3</span>
+            <div>
+              <h3 class="step-title">Run validation and transformation</h3>
+              <p class="label">Every run checks the same four things before the ML screen runs.</p>
             </div>
+          </div>
+          <div class="step-body">
+            <ul class="checks-grid text-xs">
+              <li><i data-lucide="file-check-2" class="w-3.5 h-3.5" aria-hidden="true"></i>Parse, then syntactic envelope checks</li>
+              <li><i data-lucide="ruler" class="w-3.5 h-3.5" aria-hidden="true"></i>IS 15959 / IEC 62056 OBIS mapping and unit conversion</li>
+              <li><i data-lucide="gauge" class="w-3.5 h-3.5" aria-hidden="true"></i>Physical limits (160–300 V, monotonic kWh, clock drift)</li>
+              <li><i data-lucide="bot" class="w-3.5 h-3.5" aria-hidden="true"></i>ML fault screening (advisory, synthetic-trained)</li>
+            </ul>
+            <p id="form-error" class="text-xs mt-3 mb-2 hidden" role="alert" style="color:var(--vs-red)"></p>
+            <button id="btn-run-workbench" class="btn btn-primary w-full py-3 mt-3" onclick="runWorkbenchExecution()" data-role-required="operator">
+              <i data-lucide="play" class="w-4 h-4"></i>
+              <span>Run validation and transformation</span>
+            </button>
+            <p id="run-status" class="text-xs mt-2 hidden" role="status" aria-live="polite" style="color:var(--vs-body)"></p>
           </div>
         </div>
       </div>
@@ -1093,10 +1157,11 @@
     </section>
   </main>
 
-  <footer class="w-full max-w-7xl mx-auto px-4 py-5 text-xs flex flex-wrap items-center justify-between gap-2" style="color:var(--vs-muted);border-top:1px solid var(--vs-line)">
+  <footer class="w-full px-4 py-5 text-xs flex flex-wrap items-center justify-between gap-2" style="color:var(--vs-muted);border-top:1px solid var(--vs-line)">
     <span>VidyutSetu · engineering workbench for AMI interoperability</span>
     <span><a class="link" href="/">Landing page</a> · <a class="link" href="/docs">API docs</a></span>
   </footer>
+  </div>
   </div>
 
   <section id="auth-screen" class="fixed inset-0 z-50 hidden items-center justify-center p-4" style="background:rgba(11,37,69,.82)" aria-labelledby="auth-title">

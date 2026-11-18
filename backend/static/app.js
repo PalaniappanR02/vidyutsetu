@@ -266,20 +266,41 @@ function handleVendorCardKey(event, vendorId) {
 
 /* ---------- theme ---------- */
 
+function setThemeToggleLabel(theme) {
+  const label = theme === 'dark' ? 'Light theme' : 'Dark theme';
+  const button = document.getElementById('theme-toggle');
+  if (button) {
+    const span = button.querySelector('span');
+    if (span) span.textContent = label; else button.textContent = label;
+  }
+}
+
 function applyStoredTheme() {
   const stored = localStorage.getItem('vs-theme');
   const theme = stored === 'dark' ? 'dark' : 'light';
   document.documentElement.setAttribute('data-theme', theme);
-  const button = document.getElementById('theme-toggle');
-  if (button) button.textContent = theme === 'dark' ? 'Light theme' : 'Dark theme';
+  setThemeToggleLabel(theme);
 }
 
 function toggleTheme() {
   const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
   localStorage.setItem('vs-theme', next);
-  const button = document.getElementById('theme-toggle');
-  if (button) button.textContent = next === 'dark' ? 'Light theme' : 'Dark theme';
+  setThemeToggleLabel(next);
+}
+
+/* ---------- sidebar (mobile drawer) ---------- */
+
+function toggleSidebar(force) {
+  const sidebar = document.getElementById('app-sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  const toggleButton = document.getElementById('sidebar-toggle');
+  if (!sidebar || !overlay) return;
+  const open = typeof force === 'boolean' ? force : !sidebar.classList.contains('is-open');
+  sidebar.classList.toggle('is-open', open);
+  overlay.hidden = !open;
+  if (toggleButton) toggleButton.setAttribute('aria-expanded', String(open));
+  document.body.style.overflow = open ? 'hidden' : '';
 }
 
 /* ---------- tabs ---------- */
@@ -287,6 +308,7 @@ function toggleTheme() {
 function switchTab(tabId) {
   if (authEnabled && currentUser && currentUser.role === 'viewer' &&
       ['workbench', 'compare', 'roundtrip'].includes(tabId)) return;
+  toggleSidebar(false);
   activeTab = tabId;
   document.querySelectorAll('.tab-view').forEach(el => el.classList.add('hidden'));
   document.querySelectorAll('.nav-tab[role="tab"]').forEach(el => el.setAttribute('aria-selected', 'false'));
